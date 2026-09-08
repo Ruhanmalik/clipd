@@ -23,8 +23,17 @@ KIND_FOR_SUFFIX = {
 }
 
 
+CLIP_SUFFIXES = {s for s, kind in KIND_FOR_SUFFIX.items() if kind == "clip"}
+
+
 def needs_remux(path: Path) -> bool:
-    return path.suffix.lower() == ".mkv"
+    """Every clip container goes through the remux, not just MKV.
+
+    plan.md §10 makes +faststart mandatory, and an OBS set to record MP4 or
+    MOV would otherwise upload a file with its moov atom at the end. The pass
+    is `-c copy`, so for an already-faststart file it costs a file copy.
+    """
+    return path.suffix.lower() in CLIP_SUFFIXES
 
 
 def remux_to_mp4(src: Path, dest: Path, timeout_s: float = 300) -> bool:
@@ -35,6 +44,11 @@ def remux_to_mp4(src: Path, dest: Path, timeout_s: float = 300) -> bool:
             [
                 "ffmpeg", "-y", "-loglevel", "error",
                 "-i", str(src),
+                # -map 0 keeps every stream. Without it ffmpeg selects one per
+                # type, silently discarding OBS's extra audio tracks (game-only,
+                # mic-only) while still reporting success.
+                "-map", "0",
+                "-ignore_unknown",          # attachments/data must not fail it
                 "-c", "copy",               # never re-encode
                 "-movflags", "+faststart",  # plan.md §10, mandatory
                 str(dest),

@@ -22,6 +22,11 @@ log = logging.getLogger(__name__)
 
 TIMEOUT_S = 120.0  # a several-hundred-MB clip over the tailnet
 
+# 4xx is usually permanent, but these are transient or operator-fixable: a
+# token not yet set or just rotated, a proxy redirect, a rate limit. Dropping
+# a capture on the first one of these would be a real loss.
+RETRYABLE_STATUSES = {401, 403, 408, 425, 429}
+
 
 @dataclass(frozen=True)
 class UploadResult:
@@ -77,7 +82,12 @@ def upload(cfg: Config, job: Job, client: httpx.Client | None = None) -> UploadR
             log.warning("unparseable 200 from /ingest for %s", job.capture_uuid)
             return _failure(retryable=True)
 
-    retryable = response.status_code >= 500
-    log.warning("ingest returned %s for %s (retryable=%s)",
-                response.status_code, job.capture_uuid, retryable)
+    status = response.status_code
+    retryable = (
+        status >= 500 or status in RETRYABLE_STATUSES or 300 <= status < 400
+    )
+    # Log the body: a bare status makes a 422 from the server's metadata
+    # validation impossible to diagnose.
+    log.warning("ingest returned %s for %s (retryable=%s): %s",
+                status, job.capture_uuid, retryable, response.text[:300])
     return _failure(retryable=retryable)

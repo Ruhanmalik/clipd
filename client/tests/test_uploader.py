@@ -75,14 +75,25 @@ def test_transport_failure_is_retryable(cfg, job):
     assert result.ok is False and result.retryable is True
 
 
-@pytest.mark.parametrize("status", [400, 401, 413, 422])
-def test_client_errors_are_not_retryable(cfg, job, status):
-    # Retrying a rejected request forever would just fill the disk.
+@pytest.mark.parametrize("status", [400, 413, 422])
+def test_genuinely_permanent_client_errors_are_not_retryable(cfg, job, status):
+    # A malformed request fails identically forever; retrying fills the disk.
     def handler(request):
         return httpx.Response(status, json={"detail": "nope"})
 
     result = upload(cfg, job, client=transport(handler))
     assert result.ok is False and result.retryable is False
+
+
+@pytest.mark.parametrize("status", [401, 403, 408, 429, 302])
+def test_transient_or_fixable_statuses_are_retryable(cfg, job, status):
+    # An unset or rotated token, a rate limit, or a proxy redirect must not
+    # cost the capture on the first attempt.
+    def handler(request):
+        return httpx.Response(status, json={"detail": "later"})
+
+    result = upload(cfg, job, client=transport(handler))
+    assert result.ok is False and result.retryable is True
 
 
 def test_missing_file_is_not_retryable(cfg, job, tmp_path):
