@@ -28,6 +28,16 @@ def parse_size(text: str) -> int:
     return int(float(number) * _MULTIPLIERS[suffix.upper()])
 
 
+# A budget of 0 would make every non-empty store "over budget", so the first
+# sweep would delete the entire unpinned library. A blanked env var must not
+# be able to do that.
+MIN_STORE_BYTES = 1
+
+DEFAULT_MAX_STORE = "50GB"
+DEFAULT_MAX_UPLOAD = "2GB"
+DEFAULT_BASE_URL = "http://localhost:8000"
+
+
 @dataclass(frozen=True)
 class Config:
     data_dir: Path
@@ -38,6 +48,7 @@ class Config:
     base_url: str
     sweep_interval_s: int
     share_enabled: bool
+    max_upload_bytes: int
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> "Config":
@@ -49,8 +60,21 @@ class Config:
             ingest_token=token,
             ntfy_topic=env.get("NTFY_TOPIC") or None,
             ntfy_server=env.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/"),
-            max_store_bytes=parse_size(env.get("MAX_STORE_BYTES", "50GB")),
-            base_url=env.get("BASE_URL", "http://localhost:8000").rstrip("/"),
-            sweep_interval_s=int(env.get("SWEEP_INTERVAL_S", "900")),
+            max_store_bytes=_store_budget(env),
+            base_url=(env.get("BASE_URL") or DEFAULT_BASE_URL).rstrip("/"),
+            sweep_interval_s=int(env.get("SWEEP_INTERVAL_S") or "900"),
             share_enabled=env.get("SHARE_ENABLED", "").lower() in {"1", "true", "yes"},
+            max_upload_bytes=parse_size(
+                env.get("MAX_UPLOAD_BYTES") or DEFAULT_MAX_UPLOAD
+            ),
         )
+
+
+def _store_budget(env: Mapping[str, str]) -> int:
+    """Read MAX_STORE_BYTES, refusing a budget that would empty the store."""
+    budget = parse_size(env.get("MAX_STORE_BYTES") or DEFAULT_MAX_STORE)
+    if budget < MIN_STORE_BYTES:
+        raise ValueError(
+            f"MAX_STORE_BYTES must be at least {MIN_STORE_BYTES} bytes; got {budget}"
+        )
+    return budget

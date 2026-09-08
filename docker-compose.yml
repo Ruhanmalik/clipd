@@ -17,7 +17,11 @@ services:
       INGEST_TOKEN: "${INGEST_TOKEN:?INGEST_TOKEN must be set in .env}"
       NTFY_TOPIC: "${NTFY_TOPIC}"
       MAX_STORE_BYTES: "${MAX_STORE_BYTES:-50GB}"
-      BASE_URL: "${BASE_URL}"
+      # Reject bodies larger than this before the multipart parser spools them.
+      MAX_UPLOAD_BYTES: "${MAX_UPLOAD_BYTES:-2GB}"
+      # :? not :- — a wrong BASE_URL puts a broken link on the operator's
+      # clipboard, which is worse than refusing to start.
+      BASE_URL: "${BASE_URL:?BASE_URL must be set in .env}"
     # No Docker socket mount: clipd has no reason to talk to the daemon, and a
     # read-only socket is still effectively root on the host (plan.md §4).
     healthcheck:
