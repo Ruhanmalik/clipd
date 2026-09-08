@@ -17,3 +17,8 @@ venv/
 
 # Local reference notes, not part of the repo.
 clipd-explained.md
+
+# Client config carries the ingest token; only the example is committed.
+client/config.toml
+client/.clipwatch/
+clipwatch-explained.md

@@ -29,6 +29,8 @@ THUMB_POSITION = 0.10  # 10% in, per plan.md §6
 # The stored extension is client-controlled, and Step 3 will serve these paths
 # (and plan.md §7 may expose them through a tunnel). An arbitrary extension
 # means a stored .html served as text/html, or ENAMETOOLONG on a long one.
+# Mirrors KIND_FOR_SUFFIX in client/clipwatch/remux.py. This set is the wider
+# of the two; the client only ever uploads a subset.
 ALLOWED_EXT = {
     "clip": {".mp4", ".mkv", ".mov", ".webm"},
     "screenshot": {".png", ".jpg", ".jpeg", ".webp"},
