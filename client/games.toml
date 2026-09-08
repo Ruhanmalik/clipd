@@ -1,0 +1,8 @@
+# games.toml — exe -> display name. Edit freely; keys are case-insensitive.
+"cs2.exe" = "Counter-Strike 2"
+"VALORANT-Win64-Shipping.exe" = "VALORANT"
+"RainbowSix.exe" = "Rainbow Six Siege"
+"FortniteClient-Win64-Shipping.exe" = "Fortnite"
+"r5apex.exe" = "Apex Legends"
+"FSD-Win64-Shipping.exe" = "Deep Rock Galactic"
+"MinecraftLauncher.exe" = "Minecraft"

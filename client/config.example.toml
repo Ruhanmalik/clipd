@@ -1,0 +1,41 @@
+# config.example.toml — copy to config.toml beside the exe.
+# The token is better supplied as the CLIPD_TOKEN environment variable.
+
+server_url = "http://midget.tail0056d7.ts.net:8000"
+
+# The OBS recording/screenshot output directory. State lives in a .clipwatch
+# subdirectory of this folder. Avoid a OneDrive-synced location such as the
+# default Videos folder — sync locks fight the queue, and clips would upload
+# to OneDrive as well.
+watch_dir = "C:/Users/ruhan/Videos/clipd"
+
+source_host = "desktop-amtr56i"
+
+# ingest_token = "only-if-you-cannot-use-CLIPD_TOKEN"
+
+# Executables never treated as "the game". design §5.
+# An explicit empty list disables the default list entirely.
+ignore_exes = [
+  "explorer.exe", "Discord.exe", "chrome.exe", "msedge.exe",
+  "firefox.exe", "SearchHost.exe", "ShellExperienceHost.exe",
+]
+
+# --- optional, shown with their defaults ---
+
+# Where state lives. Defaults are all under <watch_dir>/.clipwatch/.
+# work_dir     = "<watch_dir>/.clipwatch/work"      # remuxed files awaiting upload
+# queue_dir    = "<watch_dir>/.clipwatch/queue"     # pending upload jobs
+# rejected_dir = "<watch_dir>/.clipwatch/rejected"  # captures clipd refused
+
+# How often the foreground executable is sampled, and the window it is
+# scored over. detect_window_s should match the OBS replay buffer length.
+# sample_interval_s = 5.0
+# detect_window_s   = 90.0
+
+# How long a file must hold the same size before it is treated as finished.
+# OBS is still flushing when the first filesystem event arrives.
+# stability_checks   = 3
+# stability_interval_s = 0.5
+
+# Ceiling on the retry backoff, in seconds.
+# max_backoff_s = 300.0
