@@ -12,6 +12,8 @@ from __future__ import annotations
 import threading
 from collections import deque
 
+from .platform.base import PlatformAdapter
+
 
 class ExeRingBuffer:
     def __init__(self, window_s: float) -> None:
@@ -66,7 +68,9 @@ class ExeRingBuffer:
         return max(counts, key=lambda e: (counts[e], last_seen[e]))
 
 
-def record_sample(buffer: ExeRingBuffer, adapter, now: float) -> None:
+def record_sample(
+    buffer: ExeRingBuffer, adapter: PlatformAdapter, now: float
+) -> None:
     """Take one foreground sample from a PlatformAdapter into the buffer."""
     exe, title = adapter.foreground()
     buffer.record(exe, now, title)

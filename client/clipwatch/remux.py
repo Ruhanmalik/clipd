@@ -13,6 +13,10 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# Mirrors ALLOWED_EXT in server/clipd/app.py, which decides what the server
+# will store. Keep the two in step: a suffix the client uploads but the server
+# rejects costs a capture, and this list is deliberately the narrower of the
+# two (the server also accepts .webm/.webp, which OBS does not produce).
 KIND_FOR_SUFFIX = {
     ".mkv": "clip",
     ".mp4": "clip",

@@ -1,17 +1,8 @@
 import httpx
 import pytest
 from pathlib import Path
-from clipwatch.config import Config
 from clipwatch.jobs import Job
 from clipwatch.uploader import UploadResult, upload
-
-
-@pytest.fixture
-def cfg(tmp_path):
-    toml = tmp_path / "config.toml"
-    toml.write_text(f'server_url = "http://midget:8000"\nwatch_dir = "{tmp_path.as_posix()}"\n'
-                    'source_host = "desktop-amtr56i"\n')
-    return Config.load(toml, {"CLIPD_TOKEN": "secret-token"})
 
 
 @pytest.fixture
