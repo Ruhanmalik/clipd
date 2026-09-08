@@ -1054,6 +1054,14 @@ def sample_mkv(tmp_path):
     return out
 
 
+def stream_md5(path):
+    """md5 of the copied video stream — identical iff nothing was re-encoded."""
+    return subprocess.run([
+        "ffmpeg", "-v", "quiet", "-i", str(path),
+        "-map", "0:v", "-c", "copy", "-f", "md5", "-",
+    ], capture_output=True, text=True, check=True).stdout.strip()
+
+
 def probe(path):
     raw = subprocess.run([
         "ffprobe", "-v", "quiet", "-print_format", "json",
@@ -1083,14 +1091,17 @@ def test_remux_produces_a_playable_mp4(tmp_path, sample_mkv):
 
 
 def test_remux_does_not_re_encode(tmp_path, sample_mkv):
-    # The point of -c copy: the video stream must be bit-identical.
+    # The point of -c copy: the encoded video stream must be bit-identical.
+    # (Do not compare nb_frames — Matroska does not report it, so that would
+    # KeyError. The stream md5 is both correct and a stronger assertion.)
     dest = tmp_path / "out.mp4"
     remux_to_mp4(sample_mkv, dest)
+    assert stream_md5(dest) == stream_md5(sample_mkv)
+
     before = probe(sample_mkv)["streams"][0]
     after = probe(dest)["streams"][0]
     assert after["codec_name"] == before["codec_name"] == "h264"
     assert (after["width"], after["height"]) == (before["width"], before["height"])
-    assert after["nb_frames"] == before["nb_frames"]
 
 
 def test_remux_sets_faststart(tmp_path, sample_mkv):
@@ -2165,7 +2176,7 @@ Start in: the install folder.
 ```bash
 cd client && python -m pytest -q
 # Nothing outside platform/windows.py may import win32*:
-! grep -rn "^import win32\|^from win32\|import pywin32" clipwatch/ --include=*.py \
+! grep -rn "import win32\|from win32\|import pywin32" --include="*.py" clipwatch/ \
   | grep -v "clipwatch/platform/windows.py"
 ```
 
