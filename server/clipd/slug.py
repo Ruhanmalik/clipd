@@ -14,7 +14,10 @@ _WINDOWS_RESERVED = (
     | {f"LPT{i}" for i in range(1, 10)}
 )
 
-_ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+# Collapses every run of non-alphanumerics to a single "-". This is what
+# enforces spec §4's rules: the Windows-illegal set < > : " / \ | ? * and the
+# control characters are all non-alphanumeric, so they are stripped here. A
+# separate pass for them was verified to make no difference to any output.
 _NON_SLUG = re.compile(r"[^a-z0-9]+")
 
 FALLBACK = "unknown"
@@ -26,7 +29,6 @@ def slugify_game(name: str | None) -> str:
 
     text = unicodedata.normalize("NFKD", name)
     text = text.encode("ascii", "ignore").decode("ascii")
-    text = _ILLEGAL.sub(" ", text)
     text = _NON_SLUG.sub("-", text.lower())
     text = text.strip("-.")
 

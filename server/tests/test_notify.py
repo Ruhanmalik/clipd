@@ -2,8 +2,6 @@ import pytest
 from clipd.config import Config
 from clipd.notify import human_bytes, notify_capture, notify_retention
 
-pytestmark = pytest.mark.asyncio
-
 
 def cfg(topic="clipd-test"):
     return Config.from_env({"INGEST_TOKEN": "t", "NTFY_TOPIC": topic or ""})

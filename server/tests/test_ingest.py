@@ -1,38 +1,4 @@
 import json
-import pytest
-from fastapi.testclient import TestClient
-
-from clipd.app import create_app
-from clipd.config import Config
-from clipd.media import ProbeResult
-
-
-@pytest.fixture
-def cfg(tmp_path):
-    return Config.from_env({
-        "INGEST_TOKEN": "secret-token",
-        "DATA_DIR": str(tmp_path),
-        "BASE_URL": "http://clipd-server:8000",
-        "SWEEP_INTERVAL_S": "0",   # no background sweep during tests
-    })
-
-
-@pytest.fixture
-def client(cfg, monkeypatch):
-    async def fake_probe(path):
-        return ProbeResult(duration_s=90.0, width=1920, height=1080)
-
-    async def fake_thumb(src, dest, at_s):
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(b"jpeg")
-        return True
-
-    monkeypatch.setattr("clipd.app.media.probe", fake_probe)
-    monkeypatch.setattr("clipd.app.media.make_thumbnail", fake_thumb)
-    monkeypatch.setattr("clipd.app.notify_capture", lambda *a, **kw: _true())
-
-    with TestClient(create_app(cfg)) as c:
-        yield c
 
 
 async def _true():

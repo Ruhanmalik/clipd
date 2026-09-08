@@ -5,46 +5,12 @@ were independently reproduced before being fixed.
 """
 import asyncio
 import json
-import sqlite3
 
 import pytest
-from fastapi.testclient import TestClient
 
 from clipd import db
-from clipd.app import create_app
-from clipd.config import Config, parse_size
-from clipd.media import ProbeResult
+from clipd.config import Config
 from clipd.storage import move_capture, remove_capture
-
-
-@pytest.fixture
-def cfg(tmp_path):
-    return Config.from_env({
-        "INGEST_TOKEN": "secret-token",
-        "DATA_DIR": str(tmp_path),
-        "BASE_URL": "http://clipd-server:8000",
-        "SWEEP_INTERVAL_S": "0",
-    })
-
-
-@pytest.fixture
-def client(cfg, monkeypatch):
-    async def fake_probe(path):
-        return ProbeResult(90.0, 1920, 1080)
-
-    async def fake_thumb(src, dest, at_s):
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(b"jpeg")
-        return True
-
-    async def fake_notify(*a, **kw):
-        return True
-
-    monkeypatch.setattr("clipd.app.media.probe", fake_probe)
-    monkeypatch.setattr("clipd.app.media.make_thumbnail", fake_thumb)
-    monkeypatch.setattr("clipd.app.notify_capture", fake_notify)
-    with TestClient(create_app(cfg), raise_server_exceptions=False) as c:
-        yield c
 
 
 def meta_json(**over):

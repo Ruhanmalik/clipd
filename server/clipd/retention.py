@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from . import db, storage
 from .config import Config
@@ -85,7 +85,7 @@ async def sweep_and_notify(conn, cfg: Config, state: RetentionState) -> SweepRes
     else:
         state.warned_unprunable = False
 
-    ratio = result.total_bytes / budget if budget else 0.0
+    ratio = result.total_bytes / budget  # config refuses a 0 budget
     if ratio >= WARN_THRESHOLD and not result.over_budget:
         if not state.warned_high:
             await notify_retention(

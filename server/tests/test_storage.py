@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from clipd.storage import (
     rel_path_for, thumb_rel_path, write_stream, move_capture, remove_capture,
 )
