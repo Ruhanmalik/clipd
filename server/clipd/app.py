@@ -148,4 +148,17 @@ def create_app(cfg: Config) -> FastAPI:
                  clip_id, game_slug, human_bytes(size), parsed.source_host)
         return {"id": clip_id, "url": url}
 
+    @app.get("/healthz")
+    async def healthz(request: Request) -> dict:
+        conn = request.app.state.conn
+        count, total = db.store_totals(conn)
+        budget = cfg.max_store_bytes
+        return {
+            "status": "ok",
+            "clips": count,
+            "bytes": total,
+            "budget_bytes": budget,
+            "used_pct": round(total / budget * 100, 2) if budget else 0.0,
+        }
+
     return app
