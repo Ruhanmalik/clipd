@@ -1,0 +1,28 @@
+services:
+  clipd:
+    build: ./server
+    container_name: clipd
+    restart: unless-stopped
+    ports:
+      # 8000 is free on midget; 3000/3001/5055/6767/7878/8080/8096/8989/9696
+      # are all taken by existing services. See plan.md §3.
+      - "8000:8000"
+    volumes:
+      # Bind mount, not a named volume — house convention (plan.md §4), and it
+      # keeps the clip store visible to normal filesystem tools.
+      - ./data:/data
+    environment:
+      TZ: "America/Chicago"
+      DATA_DIR: "/data"
+      INGEST_TOKEN: "${INGEST_TOKEN:?INGEST_TOKEN must be set in .env}"
+      NTFY_TOPIC: "${NTFY_TOPIC}"
+      MAX_STORE_BYTES: "${MAX_STORE_BYTES:-50GB}"
+      BASE_URL: "${BASE_URL}"
+    # No Docker socket mount: clipd has no reason to talk to the daemon, and a
+    # read-only socket is still effectively root on the host (plan.md §4).
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
