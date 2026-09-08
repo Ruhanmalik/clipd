@@ -364,9 +364,10 @@ def test_resolve_falls_back_to_unknown(mapping):
     assert resolve_game(None, mapping) == "Unknown"
 
 
-def test_resolve_derives_a_name_from_the_exe_when_no_title(mapping):
-    # A bare exe is more useful than "Unknown" — the gallery can be re-tagged.
-    assert resolve_game("DeepRockGalactic.exe", mapping) == "DeepRockGalactic"
+def test_resolve_returns_unknown_for_an_unmapped_exe_with_no_title(mapping):
+    # design §5 stops at Unknown rather than inventing a name from the exe:
+    # Unknown is the re-tagging queue, and game_exe carries the exe anyway.
+    assert resolve_game("DeepRockGalactic.exe", mapping) == "Unknown"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -421,11 +422,10 @@ def resolve_game(
     if title:
         return title
 
-    if exe:
-        stem = Path(exe).stem.strip()
-        if stem:
-            return stem
-
+    # design §5 stops here deliberately: Unknown is a normal gallery tile and
+    # doubles as the re-tagging queue. Falling back to the exe stem would give
+    # every unmapped game its own tile and scatter that queue. The exe is not
+    # lost either way — it is sent separately as game_exe.
     return UNKNOWN
 ```
 
