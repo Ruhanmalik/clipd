@@ -101,9 +101,11 @@ async def sweep_and_notify(conn, cfg: Config, state: RetentionState) -> SweepRes
 
 
 async def sweep_loop(conn, cfg: Config, state: RetentionState) -> None:
+    # Sweep first, then sleep. With `restart: unless-stopped`, a service that
+    # crash-loops faster than the interval would otherwise never sweep at all.
     while True:
-        await asyncio.sleep(cfg.sweep_interval_s)
         try:
             await sweep_and_notify(conn, cfg, state)
         except Exception:
             log.exception("retention sweep failed; will retry next interval")
+        await asyncio.sleep(cfg.sweep_interval_s)

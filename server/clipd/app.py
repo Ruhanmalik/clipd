@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import AsyncIterator, Literal
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from pydantic import BaseModel, ValidationError
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ValidationError, field_validator
 
 from . import db, media, storage
 from .config import Config
@@ -25,6 +26,20 @@ log = logging.getLogger(__name__)
 DEFAULT_EXT = {"clip": ".mp4", "screenshot": ".png"}
 THUMB_POSITION = 0.10  # 10% in, per plan.md §6
 
+# The stored extension is client-controlled, and Step 3 will serve these paths
+# (and plan.md §7 may expose them through a tunnel). An arbitrary extension
+# means a stored .html served as text/html, or ENAMETOOLONG on a long one.
+ALLOWED_EXT = {
+    "clip": {".mp4", ".mkv", ".mov", ".webm"},
+    "screenshot": {".png", ".jpg", ".jpeg", ".webp"},
+}
+
+# Sanity bounds on the client's clock. A fresh Windows install before NTP
+# reports 1970, which would file captures in the past and make them the first
+# thing the oldest-first sweep deletes.
+MIN_CAPTURED_AT = 946_684_800   # 2000-01-01
+CLOCK_SKEW_S = 86_400           # tolerate a day ahead
+
 
 class IngestMeta(BaseModel):
     kind: Literal["clip", "screenshot"]
@@ -35,6 +50,15 @@ class IngestMeta(BaseModel):
     title: str | None = None
     captured_at: int | None = None
 
+    @field_validator("captured_at")
+    @classmethod
+    def _plausible_clock(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if not MIN_CAPTURED_AT <= value <= int(time.time()) + CLOCK_SKEW_S:
+            raise ValueError("captured_at is outside the plausible range")
+        return value
+
 
 def require_ingest_token(
     request: Request, authorization: str | None = Header(default=None)
@@ -42,8 +66,28 @@ def require_ingest_token(
     cfg: Config = request.app.state.cfg
     expected = f"Bearer {cfg.ingest_token}"
     # compare_digest, not ==, so a wrong token cannot be recovered by timing.
-    if not authorization or not hmac.compare_digest(authorization, expected):
+    # Compare bytes: Starlette decodes headers as latin-1, and compare_digest
+    # raises TypeError on a non-ASCII str, which would 500 on unauthenticated
+    # input instead of returning 401.
+    if not authorization or not hmac.compare_digest(
+        authorization.encode("utf-8", "surrogateescape"),
+        expected.encode("utf-8", "surrogateescape"),
+    ):
         raise HTTPException(status_code=401, detail="unauthorized")
+
+
+def _capture_ext(filename: str | None, kind: str) -> str:
+    ext = Path(filename or "").suffix.lower()
+    return ext if ext in ALLOWED_EXT[kind] else DEFAULT_EXT[kind]
+
+
+def _discard(cfg: Config, rel_path: str, thumb_rel: str) -> None:
+    """Drop a capture and its thumbnail. Best-effort: the caller is unwinding."""
+    for rel in (rel_path, thumb_rel):
+        try:
+            storage.remove_capture(cfg.data_dir, rel)
+        except Exception:
+            log.warning("could not discard %s", rel, exc_info=True)
 
 
 async def _upload_chunks(file: UploadFile) -> AsyncIterator[bytes]:
@@ -72,7 +116,30 @@ def create_app(cfg: Config) -> FastAPI:
             task.cancel()
         app.state.conn.close()
 
-    app = FastAPI(title="clipd", lifespan=lifespan)
+    # No interactive docs: they are unauthenticated and advertise the /ingest
+    # contract, and they are not in the spec's route table.
+    app = FastAPI(
+        title="clipd",
+        lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
+
+    @app.middleware("http")
+    async def enforce_upload_cap(request: Request, call_next):
+        """Reject oversized bodies before the multipart parser spools them.
+
+        FastAPI resolves path dependencies *after* parsing the form, so the
+        bearer check cannot gate this: without the cap, any tailnet host could
+        spool an unbounded body to the container's writable layer, which is
+        outside the bind mount and so outside MAX_STORE_BYTES entirely.
+        """
+        declared = request.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > cfg.max_upload_bytes:
+            return JSONResponse({"detail": "upload too large"}, status_code=413)
+        return await call_next(request)
+
 
     @app.post("/ingest", dependencies=[Depends(require_ingest_token)])
     async def ingest(
@@ -85,7 +152,13 @@ def create_app(cfg: Config) -> FastAPI:
         try:
             parsed = IngestMeta.model_validate_json(meta)
         except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from None
+            # include_context=False: pydantic puts the live exception object in
+            # ctx, which is not JSON-serializable, so rendering the 422 would
+            # itself 500.
+            raise HTTPException(
+                status_code=422,
+                detail=exc.errors(include_context=False, include_url=False),
+            ) from None
 
         # Idempotency: the watcher retries, and a lost response must not
         # produce a second copy. See spec §3.
@@ -100,17 +173,25 @@ def create_app(cfg: Config) -> FastAPI:
         clip_id = new_id()
         created_at = parsed.captured_at or int(time.time())
         game_slug = slugify_game(parsed.game)
-        ext = Path(file.filename or "").suffix.lower() or DEFAULT_EXT[parsed.kind]
+        ext = _capture_ext(file.filename, parsed.kind)
         rel_path = storage.rel_path_for(parsed.kind, game_slug, created_at, clip_id, ext)
+        thumb_rel = storage.thumb_rel_path(clip_id)
 
         size = await storage.write_stream(cfg.data_dir / rel_path, _upload_chunks(file))
 
-        probed = await media.probe(cfg.data_dir / rel_path)
-        thumb_rel = storage.thumb_rel_path(clip_id)
-        at = (probed.duration_s or 0.0) * THUMB_POSITION
-        has_thumb = await media.make_thumbnail(
-            cfg.data_dir / rel_path, cfg.data_dir / thumb_rel, at
-        )
+        # Everything from here to the insert must clean up after itself. A file
+        # on disk with no row is invisible to the retention sweep, which sums
+        # `bytes` from the index — and plan.md §8.7 has the watcher retrying
+        # until it gets a 200, so one fault becomes an orphan per retry.
+        try:
+            probed = await media.probe(cfg.data_dir / rel_path)
+            at = (probed.duration_s or 0.0) * THUMB_POSITION
+            has_thumb = await media.make_thumbnail(
+                cfg.data_dir / rel_path, cfg.data_dir / thumb_rel, at
+            )
+        except BaseException:
+            _discard(cfg, rel_path, thumb_rel)
+            raise
 
         clip = db.Clip(
             id=clip_id,
@@ -136,9 +217,10 @@ def create_app(cfg: Config) -> FastAPI:
         try:
             db.insert_clip(conn, clip)
         except sqlite3.IntegrityError:
-            # Two retries raced past the check above. Discard this copy and
-            # return whichever one won.
-            storage.remove_capture(cfg.data_dir, rel_path)
+            # Two retries raced past the check above. Discard this copy —
+            # thumbnail included, or it outlives the row that referenced it —
+            # and return whichever one won.
+            _discard(cfg, rel_path, thumb_rel)
             winner = db.get_by_capture_uuid(conn, parsed.capture_uuid)
             if winner is None:
                 raise
