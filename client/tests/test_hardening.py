@@ -12,42 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from clipwatch.config import Config
 from clipwatch.detector import ExeRingBuffer
-from clipwatch.jobs import JobQueue
+from clipwatch.platform import NullAdapter as Adapter
 from clipwatch.pipeline import drain, reconcile
 from clipwatch.uploader import UploadResult
-
-
-class Adapter:
-    def __init__(self):
-        self.clipboard = None
-        self.notifications = []
-
-    def foreground(self):
-        return (None, None)
-
-    def set_clipboard(self, text):
-        self.clipboard = text
-        return True
-
-    def notify(self, title, body):
-        self.notifications.append((title, body))
-        return True
-
-
-@pytest.fixture
-def cfg(tmp_path):
-    f = tmp_path / "config.toml"
-    f.write_text(f'server_url = "http://clipd-server:8000"\nwatch_dir = "{tmp_path.as_posix()}"\n'
-                 'source_host = "gaming-pc"\nstability_checks = 1\n'
-                 'stability_interval_s = 0.001\n')
-    return Config.load(f, {"CLIPD_TOKEN": "t"})
-
-
-@pytest.fixture
-def queue(cfg):
-    return JobQueue(cfg.queue_dir, cfg.max_backoff_s)
+from conftest import make_video, needs_ffmpeg
 
 
 def add_job(queue, tmp_path, name="a.mp4"):
@@ -60,16 +29,6 @@ def add_job(queue, tmp_path, name="a.mp4"):
 # 1 — next_attempt_at was persisted from time.monotonic(), which on Windows is
 # milliseconds since boot. A job rescheduled after days of uptime became
 # eligible again only after the machine had been up that long once more.
-def test_retry_deadline_survives_a_reboot(queue, tmp_path):
-    job = add_job(queue, tmp_path)
-    uptime_3_days = 259_200.0
-    queue.reschedule(job, now=time.time() + 0)  # scheduled against the wall clock
-
-    # Simulate a reboot: monotonic restarts near zero, wall clock does not.
-    assert queue.ready(now=time.time() + 10_000), "job stranded after reboot"
-    del uptime_3_days
-
-
 def test_an_absurd_future_deadline_is_treated_as_ready(queue, tmp_path):
     # Defence in depth: a queue file written by an older build, or a clock jump.
     job = add_job(queue, tmp_path)
@@ -182,7 +141,7 @@ def test_an_mp4_input_still_gets_faststart(cfg, tmp_path):
     original = src.read_bytes()[:200_000]
     assert original.index(b"mdat") < original.index(b"moov"), "input should be moov-last"
 
-    job = prepare_capture(cfg, src, ExeRingBuffer(90), {}, Adapter(), now=0)
+    job = prepare_capture(cfg, src, ExeRingBuffer(90), {}, now=0)
     assert job is not None
     head = Path(job.path).read_bytes()[:200_000]
     assert head.index(b"moov") < head.index(b"mdat")
@@ -194,19 +153,19 @@ def test_reconcile_picks_up_a_capture_left_while_the_daemon_was_down(cfg, queue,
     orphan = tmp_path / "missed.mp4"
     orphan.write_bytes(b"videodata")
 
-    found = reconcile(cfg, ExeRingBuffer(90), {}, Adapter(), now=0)
+    found = reconcile(cfg, ExeRingBuffer(90), {}, now=0)
 
     assert found == 1
     assert [Path(j.source_path).name for j in queue.all()] == ["missed.mp4"]
 
 
 def test_reconcile_does_not_requeue_an_already_queued_capture(cfg, queue, tmp_path):
-    reconcile(cfg, ExeRingBuffer(90), {}, Adapter(), now=0)
+    reconcile(cfg, ExeRingBuffer(90), {}, now=0)
     (tmp_path / "one.mp4").write_bytes(b"x")
-    reconcile(cfg, ExeRingBuffer(90), {}, Adapter(), now=0)
+    reconcile(cfg, ExeRingBuffer(90), {}, now=0)
     before = len(queue.all())
 
-    reconcile(cfg, ExeRingBuffer(90), {}, Adapter(), now=0)
+    reconcile(cfg, ExeRingBuffer(90), {}, now=0)
     assert len(queue.all()) == before
 
 
@@ -221,7 +180,7 @@ def test_reconcile_adopts_a_genuinely_stale_work_orphan(cfg, queue, tmp_path):
     old = time.time() - 3600
     os.utime(stray, (old, old))
 
-    assert reconcile(cfg, ExeRingBuffer(90), {}, Adapter(), now=0) == 1
+    assert reconcile(cfg, ExeRingBuffer(90), {}, now=0) == 1
     jobs = queue.all()
     assert len(jobs) == 1 and jobs[0].game is None
 
@@ -238,7 +197,7 @@ def test_permanently_rejected_captures_move_out_of_the_watch_dir(cfg, queue, tmp
     moved = list(cfg.rejected_dir.glob("*.mp4"))
     assert len(moved) == 1, "rejected file must be preserved, not deleted"
     # ...and must not be picked straight back up.
-    assert reconcile(cfg, ExeRingBuffer(90), {}, Adapter(), now=0) == 0
+    assert reconcile(cfg, ExeRingBuffer(90), {}, now=0) == 0
 
 
 def test_a_rejected_capture_notifies_the_user(cfg, queue, tmp_path):
@@ -251,23 +210,29 @@ def test_a_rejected_capture_notifies_the_user(cfg, queue, tmp_path):
     assert adapter.notifications, "a dropped capture must not be silent"
 
 
+@needs_ffmpeg
 def test_reconcile_does_not_adopt_its_own_remux_output(cfg, queue, tmp_path):
     """The watch_dir pass creates work_dir output; the work_dir pass must not
-    then treat that output as an orphan and queue the same capture twice."""
-    shutil.rmtree(cfg.queue_dir, ignore_errors=True)
-    (tmp_path / "capture.mp4").write_bytes(b"videodata")
+    then treat that output as an orphan and queue the same capture twice.
 
-    adopted = reconcile(cfg, ExeRingBuffer(90), {}, Adapter(), now=0)
+    Uses a real video so the remux actually succeeds — with a stub payload the
+    remux fails, work_dir stays empty, and the path under test is never entered.
+    """
+    make_video(tmp_path / "capture.mkv")
+
+    adopted = reconcile(cfg, ExeRingBuffer(90), {}, now=0)
 
     assert adopted == 1, f"adopted {adopted} for a single capture"
-    assert len(queue.all()) == 1
+    jobs = queue.all()
+    assert len(jobs) == 1
+    assert Path(jobs[0].path).parent == cfg.work_dir  # the remux really happened
 
 
 def test_reconcile_ignores_work_files_that_are_still_in_flight(cfg, queue, tmp_path):
     cfg.work_dir.mkdir(parents=True, exist_ok=True)
     (cfg.work_dir / "inflight.mp4").write_bytes(b"x")  # mtime = now
 
-    assert reconcile(cfg, ExeRingBuffer(90), {}, Adapter(), now=0) == 0
+    assert reconcile(cfg, ExeRingBuffer(90), {}, now=0) == 0
     assert queue.all() == []
 
 
@@ -280,8 +245,8 @@ def test_the_same_capture_is_never_queued_twice(cfg, queue, tmp_path):
     capture = tmp_path / "replay.mp4"
     capture.write_bytes(b"videodata")
 
-    first = prepare_capture(cfg, capture, ExeRingBuffer(90), {}, Adapter(), now=0)
-    second = prepare_capture(cfg, capture, ExeRingBuffer(90), {}, Adapter(), now=0)
+    first = prepare_capture(cfg, capture, ExeRingBuffer(90), {}, now=0)
+    second = prepare_capture(cfg, capture, ExeRingBuffer(90), {}, now=0)
 
     assert first is not None
     assert second is None

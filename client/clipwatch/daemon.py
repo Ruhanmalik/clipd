@@ -12,6 +12,7 @@ from watchdog.observers import Observer
 from .config import Config
 from .detector import ExeRingBuffer, record_sample
 from .jobs import JobQueue
+from .platform.base import PlatformAdapter
 from .pipeline import drain, prepare_capture, reconcile
 
 log = logging.getLogger(__name__)
@@ -39,7 +40,8 @@ class _CaptureHandler(FileSystemEventHandler):
 
 
 class Daemon:
-    def __init__(self, cfg: Config, adapter, mapping: dict[str, str]) -> None:
+    def __init__(self, cfg: Config, adapter: PlatformAdapter,
+                 mapping: dict[str, str]) -> None:
         self.cfg = cfg
         self.adapter = adapter
         self.mapping = mapping
@@ -52,7 +54,7 @@ class Daemon:
     def handle_capture(self, path: Path) -> None:
         try:
             if prepare_capture(self.cfg, path, self.buffer, self.mapping,
-                               self.adapter, time.monotonic()):
+                               time.monotonic()):
                 drain(self.cfg, self.queue, self.adapter, time.time())
         except Exception:
             log.exception("failed to handle capture %s", path)
@@ -83,7 +85,7 @@ class Daemon:
         while not self._stop.is_set():
             try:
                 if reconcile(self.cfg, self.buffer, self.mapping,
-                             self.adapter, time.monotonic()):
+                             time.monotonic()):
                     drain(self.cfg, self.queue, self.adapter, time.time())
             except Exception:
                 log.exception("reconcile failed; will retry")

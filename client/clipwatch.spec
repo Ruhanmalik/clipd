@@ -4,9 +4,11 @@ a = Analysis(
     ["clipwatch/main.py"],
     pathex=[],
     binaries=[],
-    datas=[("games.toml", "."), ("config.example.toml", ".")],
-    hiddenimports=["win32clipboard", "win32gui", "win32process", "win32con",
-                   "windows_toasts"],
+    datas=[("games.toml", ".")],
+    # Only imports PyInstaller's static analysis cannot see: these two are
+    # function-local in platform/windows.py. The top-level win32gui/process/con
+    # are found automatically.
+    hiddenimports=["win32clipboard", "windows_toasts"],
     hookspath=[],
     excludes=[],
 )

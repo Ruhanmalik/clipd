@@ -1,6 +1,5 @@
-import json
 import pytest
-from clipwatch.jobs import Job, JobQueue, backoff_for
+from clipwatch.jobs import JobQueue, backoff_for
 
 
 @pytest.fixture

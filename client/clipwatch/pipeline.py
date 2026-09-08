@@ -11,6 +11,7 @@ from .config import Config
 from .detector import ExeRingBuffer
 from .games import resolve_game
 from .jobs import Job, JobQueue
+from .platform.base import PlatformAdapter
 from .remux import KIND_FOR_SUFFIX, needs_remux, remux_to_mp4
 from .stability import wait_until_stable
 from .uploader import upload
@@ -45,7 +46,7 @@ def queued_sources(cfg: Config) -> set[str]:
 
 
 def reconcile(
-    cfg: Config, buffer: ExeRingBuffer, mapping: dict[str, str], adapter, now: float
+    cfg: Config, buffer: ExeRingBuffer, mapping: dict[str, str], now: float
 ) -> int:
     """Adopt captures that never made it into the queue. Returns how many.
 
@@ -57,35 +58,36 @@ def reconcile(
     if not _RECONCILE_LOCK.acquire(blocking=False):
         return 0
     try:
-        return _reconcile_locked(cfg, buffer, mapping, adapter, now)
+        return _reconcile_locked(cfg, buffer, mapping, now)
     finally:
         _RECONCILE_LOCK.release()
 
 
 def _reconcile_locked(
-    cfg: Config, buffer: ExeRingBuffer, mapping: dict[str, str], adapter, now: float
+    cfg: Config, buffer: ExeRingBuffer, mapping: dict[str, str], now: float
 ) -> int:
     internal = {cfg.work_dir.resolve(), cfg.queue_dir.resolve(),
                 cfg.rejected_dir.resolve()}
     adopted = 0
 
+    # Read the queue once for the whole sweep. prepare_capture would otherwise
+    # re-read it per file, making a sweep over N captures cost N scans.
     known = queued_sources(cfg)
     for path in sorted(cfg.watch_dir.iterdir()) if cfg.watch_dir.is_dir() else []:
         if not path.is_file() or path.resolve().parent in internal:
             continue
-        if str(path) in known:
-            continue
-        if prepare_capture(cfg, path, buffer, mapping, adapter, now):
+        job = prepare_capture(cfg, path, buffer, mapping, now, known=known)
+        if job:
+            known.update({job.path, job.source_path})
             adopted += 1
 
     # An MP4 in work_dir with no job is a crash between remux and enqueue. Its
     # game is unrecoverable, so it lands as Unknown — which design §5 already
     # treats as the re-tagging queue. Better an Unknown clip than a lost one.
     #
-    # Re-read the queue first: the loop above just enqueued jobs whose remux
-    # output lives here, and adopting those would duplicate the capture.
+    # `known` already includes the remux output of everything queued above,
+    # so that output cannot be mistaken for an orphan here.
     if cfg.work_dir.is_dir():
-        known = queued_sources(cfg)
         queue = JobQueue(cfg.queue_dir, cfg.max_backoff_s)
         for path in sorted(cfg.work_dir.glob("*.mp4")):
             if str(path) in known:
@@ -108,11 +110,12 @@ def _reconcile_locked(
 
 def prepare_capture(
     cfg: Config, path: Path, buffer: ExeRingBuffer, mapping: dict[str, str],
-    adapter, now: float,
+    now: float, known: set[str] | None = None,
 ) -> Job | None:
-    # `adapter` is unused today; kept so a future step can surface a failed
-    # remux to the user without changing every call site.
-    """Settle, remux if needed, and enqueue. None if the file is not ours."""
+    """Settle, remux if needed, and enqueue. None if the file is not ours.
+
+    `known` lets a caller that already read the queue avoid a re-read per file.
+    """
     path = Path(path)
 
     # Our own remux output lands in work_dir; re-ingesting it would loop.
@@ -128,7 +131,7 @@ def prepare_capture(
     # on macOS FSEvents will even replay a historical event for a file that
     # existed before the observer started. Enqueuing twice means uploading the
     # same capture under two capture_uuids, which defeats server-side dedupe.
-    if str(path) in queued_sources(cfg):
+    if str(path) in (known if known is not None else queued_sources(cfg)):
         log.debug("%s is already queued", path.name)
         return None
 
@@ -193,7 +196,8 @@ def _reject(cfg: Config, job: Job) -> Path | None:
         return None
 
 
-def drain(cfg: Config, queue: JobQueue, adapter, now: float, upload_fn=upload) -> int:
+def drain(cfg: Config, queue: JobQueue, adapter: PlatformAdapter,
+          now: float, upload_fn=upload) -> int:
     """Attempt every ready job. Returns how many succeeded.
 
     Non-blocking lock: the immediate drain exists only to cut latency, so if a
@@ -207,7 +211,8 @@ def drain(cfg: Config, queue: JobQueue, adapter, now: float, upload_fn=upload) -
         _DRAIN_LOCK.release()
 
 
-def _drain_locked(cfg: Config, queue: JobQueue, adapter, now: float, upload_fn) -> int:
+def _drain_locked(cfg: Config, queue: JobQueue, adapter: PlatformAdapter,
+                  now: float, upload_fn) -> int:
     succeeded = 0
 
     for job in queue.ready(now):
