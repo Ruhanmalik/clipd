@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 from clipd.db import (
     Clip, connect, init_schema, insert_clip, get_by_id, get_by_capture_uuid,
@@ -45,7 +47,7 @@ def test_get_by_capture_uuid_finds_the_row(conn):
 
 def test_capture_uuid_is_unique(conn):
     insert_clip(conn, make_clip())
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.IntegrityError):
         insert_clip(conn, make_clip(id="different"))
 
 

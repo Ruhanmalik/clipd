@@ -81,6 +81,15 @@ def _capture_ext(filename: str | None, kind: str) -> str:
     return ext if ext in ALLOWED_EXT[kind] else DEFAULT_EXT[kind]
 
 
+def _clip_url(cfg: Config, clip_id: str) -> str:
+    """The one definition of a clip's URL. /v/<id> is a step 3 route."""
+    return f"{cfg.base_url}/v/{clip_id}"
+
+
+def _duplicate_response(cfg: Config, clip: db.Clip) -> dict:
+    return {"id": clip.id, "url": _clip_url(cfg, clip.id), "duplicate": True}
+
+
 def _discard(cfg: Config, rel_path: str, thumb_rel: str) -> None:
     """Drop a capture and its thumbnail. Best-effort: the caller is unwinding."""
     for rel in (rel_path, thumb_rel):
@@ -164,11 +173,7 @@ def create_app(cfg: Config) -> FastAPI:
         # produce a second copy. See spec §3.
         existing = db.get_by_capture_uuid(conn, parsed.capture_uuid)
         if existing:
-            return {
-                "id": existing.id,
-                "url": f"{cfg.base_url}/v/{existing.id}",
-                "duplicate": True,
-            }
+            return _duplicate_response(cfg, existing)
 
         clip_id = new_id()
         created_at = parsed.captured_at or int(time.time())
@@ -224,13 +229,9 @@ def create_app(cfg: Config) -> FastAPI:
             winner = db.get_by_capture_uuid(conn, parsed.capture_uuid)
             if winner is None:
                 raise
-            return {
-                "id": winner.id,
-                "url": f"{cfg.base_url}/v/{winner.id}",
-                "duplicate": True,
-            }
+            return _duplicate_response(cfg, winner)
 
-        url = f"{cfg.base_url}/v/{clip_id}"
+        url = _clip_url(cfg, clip_id)
         duration = f"{probed.duration_s:.0f}s · " if probed.duration_s else ""
         await notify_capture(
             cfg,
@@ -253,7 +254,8 @@ def create_app(cfg: Config) -> FastAPI:
             "clips": count,
             "bytes": total,
             "budget_bytes": budget,
-            "used_pct": round(total / budget * 100, 2) if budget else 0.0,
+            # budget is >= MIN_STORE_BYTES; config refuses 0.
+            "used_pct": round(total / budget * 100, 2),
         }
 
     return app

@@ -1,3 +1,5 @@
+import string
+
 import pytest
 from clipd.slug import slugify_game
 
@@ -17,8 +19,12 @@ def test_slugify_normalizes_names(raw, expected):
 
 @pytest.mark.parametrize("raw", ['A<B', 'A>B', 'A:B', 'A"B', 'A/B', "A\\B", "A|B", "A?B", "A*B"])
 def test_slugify_strips_windows_illegal_characters(raw):
+    # Assert the actual contract: the output is drawn from [a-z0-9-] only.
+    # Asserting merely "no illegal characters" cannot fail, because the
+    # non-alphanumeric collapse already guarantees it.
     result = slugify_game(raw)
-    assert not any(c in result for c in '<>:"/\\|?*')
+    assert set(result) <= set(string.ascii_lowercase + string.digits + "-")
+    assert result == "a-b"
 
 
 @pytest.mark.parametrize("reserved", ["CON", "PRN", "AUX", "NUL", "COM1", "LPT9"])

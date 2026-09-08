@@ -1,5 +1,5 @@
 import pytest
-from clipd import db, retention
+from clipd import db
 from clipd.config import Config
 from clipd.retention import RetentionState, sweep, sweep_and_notify
 

@@ -22,6 +22,13 @@ services:
       # :? not :- — a wrong BASE_URL puts a broken link on the operator's
       # clipboard, which is worse than refusing to start.
       BASE_URL: "${BASE_URL:?BASE_URL must be set in .env}"
+      # Compose's .env is interpolated into this file, not injected into the
+      # container — anything config.py reads must be listed here explicitly or
+      # the operator's setting silently does nothing.
+      NTFY_SERVER: "${NTFY_SERVER:-https://ntfy.sh}"
+      SWEEP_INTERVAL_S: "${SWEEP_INTERVAL_S:-900}"
+      SHARE_ENABLED: "${SHARE_ENABLED:-false}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
     # No Docker socket mount: clipd has no reason to talk to the daemon, and a
     # read-only socket is still effectively root on the host (plan.md §4).
     healthcheck:

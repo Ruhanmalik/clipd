@@ -1,9 +1,6 @@
 import json
 import pytest
-from pathlib import Path
 from clipd.media import ProbeResult, probe, make_thumbnail
-
-pytestmark = pytest.mark.asyncio
 
 FFPROBE_JSON = json.dumps({
     "format": {"duration": "90.5"},

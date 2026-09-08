@@ -18,7 +18,7 @@ def human_bytes(n: int) -> str:
         if value < 1024 or unit == "TB":
             return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
         value /= 1024
-    return f"{value:.1f} TB"
+    raise AssertionError("unreachable: the TB branch always returns")
 
 
 async def _post(cfg: Config, headers: dict[str, str], body: str) -> bool:
