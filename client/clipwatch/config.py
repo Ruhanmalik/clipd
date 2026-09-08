@@ -25,6 +25,7 @@ class Config:
     watch_dir: Path
     work_dir: Path
     queue_dir: Path
+    rejected_dir: Path
     source_host: str
     sample_interval_s: float
     detect_window_s: float
@@ -37,7 +38,9 @@ class Config:
     def load(cls, toml_path: Path | None, env: Mapping[str, str]) -> "Config":
         raw: dict = {}
         if toml_path is not None and toml_path.exists():
-            raw = tomllib.loads(toml_path.read_text())
+            # TOML is defined as UTF-8; the platform default is cp1252
+            # on Windows, which mangles a non-ASCII watch_dir.
+            raw = tomllib.loads(toml_path.read_text(encoding="utf-8"))
 
         token = env.get("CLIPD_TOKEN") or raw.get("ingest_token") or ""
         if not token.strip():
@@ -46,9 +49,11 @@ class Config:
         watch_dir = Path(raw["watch_dir"])
         state = watch_dir / ".clipwatch"
 
+        # `is not None`, so an explicit empty list really disables the list.
         ignore = raw.get("ignore_exes")
         ignore_exes = (
-            frozenset(e.lower() for e in ignore) if ignore else DEFAULT_IGNORE_EXES
+            frozenset(e.lower() for e in ignore)
+            if ignore is not None else DEFAULT_IGNORE_EXES
         )
 
         return cls(
@@ -57,6 +62,7 @@ class Config:
             watch_dir=watch_dir,
             work_dir=Path(raw.get("work_dir", state / "work")),
             queue_dir=Path(raw.get("queue_dir", state / "queue")),
+            rejected_dir=Path(raw.get("rejected_dir", state / "rejected")),
             source_host=raw.get("source_host", "unknown"),
             sample_interval_s=float(raw.get("sample_interval_s", 5.0)),
             detect_window_s=float(raw.get("detect_window_s", 90.0)),

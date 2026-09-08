@@ -35,11 +35,15 @@ def probe(path):
     return json.loads(raw)
 
 
-def test_needs_remux_only_for_mkv():
+def test_every_clip_container_is_remuxed_but_screenshots_are_not():
+    # plan.md §10 makes +faststart mandatory, so an MP4 or MOV recording gets
+    # the -c copy pass too rather than being uploaded moov-last.
     assert needs_remux(Path("a.mkv")) is True
     assert needs_remux(Path("a.MKV")) is True
-    assert needs_remux(Path("a.mp4")) is False
+    assert needs_remux(Path("a.mp4")) is True
+    assert needs_remux(Path("a.mov")) is True
     assert needs_remux(Path("a.png")) is False
+    assert needs_remux(Path("a.jpg")) is False
 
 
 def test_kind_mapping_covers_clips_and_screenshots():

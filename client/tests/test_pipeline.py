@@ -102,7 +102,7 @@ def test_drain_keeps_the_file_when_the_upload_is_retryable(cfg, tmp_path, buffer
     assert queue.all()[0].attempts == 1      # and it is scheduled to retry
 
 
-def test_drain_drops_the_job_but_keeps_the_file_on_permanent_rejection(
+def test_drain_preserves_a_permanently_rejected_capture_out_of_the_way(
     cfg, tmp_path, buffer, queue
 ):
     job = prepare_capture(cfg, make_mp4(tmp_path), buffer, MAPPING, NullAdapter(), now=60)
@@ -112,7 +112,9 @@ def test_drain_drops_the_job_but_keeps_the_file_on_permanent_rejection(
 
     assert drain(cfg, queue, NullAdapter(), now=0, upload_fn=rejected) == 0
     assert queue.all() == []
-    assert Path(job.path).exists()  # kept for inspection rather than silently lost
+    # Preserved, but moved aside so the reconcile sweep will not re-adopt it.
+    assert not Path(job.path).exists()
+    assert len(list(cfg.rejected_dir.glob("*.mp4"))) == 1
 
 
 def test_drain_skips_jobs_still_in_backoff(cfg, tmp_path, buffer, queue):

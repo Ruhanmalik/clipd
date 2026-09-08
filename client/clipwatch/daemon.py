@@ -12,11 +12,16 @@ from watchdog.observers import Observer
 from .config import Config
 from .detector import ExeRingBuffer, record_sample
 from .jobs import JobQueue
-from .pipeline import drain, prepare_capture
+from .pipeline import drain, prepare_capture, reconcile
 
 log = logging.getLogger(__name__)
 
 DRAIN_INTERVAL_S = 5.0
+RECONCILE_INTERVAL_S = 300.0
+
+# Two clocks, deliberately. The ring buffer measures elapsed time and must not
+# be disturbed by an NTP correction, so it uses monotonic. Queue deadlines are
+# written to disk and must outlive a reboot, so they use the wall clock.
 
 
 class _CaptureHandler(FileSystemEventHandler):
@@ -48,7 +53,7 @@ class Daemon:
         try:
             if prepare_capture(self.cfg, path, self.buffer, self.mapping,
                                self.adapter, time.monotonic()):
-                drain(self.cfg, self.queue, self.adapter, time.monotonic())
+                drain(self.cfg, self.queue, self.adapter, time.time())
         except Exception:
             log.exception("failed to handle capture %s", path)
 
@@ -64,20 +69,36 @@ class Daemon:
         # Also picks up anything left queued by a previous run.
         while not self._stop.is_set():
             try:
-                drain(self.cfg, self.queue, self.adapter, time.monotonic())
+                drain(self.cfg, self.queue, self.adapter, time.time())
             except Exception:
                 log.exception("drain failed; will retry")
             self._stop.wait(DRAIN_INTERVAL_S)
 
+    def _reconcile_loop(self) -> None:
+        """Adopt captures that never reached the queue.
+
+        A watchdog event is the only other way in, so without this anything
+        written while the daemon was down is lost — which plan.md §8.7 forbids.
+        """
+        while not self._stop.is_set():
+            try:
+                if reconcile(self.cfg, self.buffer, self.mapping,
+                             self.adapter, time.monotonic()):
+                    drain(self.cfg, self.queue, self.adapter, time.time())
+            except Exception:
+                log.exception("reconcile failed; will retry")
+            self._stop.wait(RECONCILE_INTERVAL_S)
+
     def start(self) -> None:
-        self.cfg.work_dir.mkdir(parents=True, exist_ok=True)
-        self.cfg.queue_dir.mkdir(parents=True, exist_ok=True)
+        for directory in (self.cfg.work_dir, self.cfg.queue_dir, self.cfg.rejected_dir):
+            directory.mkdir(parents=True, exist_ok=True)
 
         self._observer.schedule(_CaptureHandler(self), str(self.cfg.watch_dir),
                                 recursive=False)
         self._observer.start()
 
-        for target in (self._sample_loop, self._drain_loop):
+        for target in (self._sample_loop, self._drain_loop,
+                       self._reconcile_loop):
             thread = threading.Thread(target=target, daemon=True)
             thread.start()
             self._threads.append(thread)

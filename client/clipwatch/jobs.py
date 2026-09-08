@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
+import time
 import uuid
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -51,11 +53,23 @@ class JobQueue:
         return self.queue_dir / f"{capture_uuid}.json"
 
     def _write(self, job: Job) -> None:
-        """Atomic: a half-written job file must never be loadable."""
+        """Atomic and durable: a half-written job file must never be loadable.
+
+        The temp name is unique because two threads may reschedule the same
+        job concurrently; a fixed name would let one rename the other's file
+        out from under it.
+        """
         target = self._file(job.capture_uuid)
-        tmp = target.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(asdict(job), indent=2))
-        os.replace(tmp, target)
+        fd, tmp_name = tempfile.mkstemp(dir=self.queue_dir, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as handle:
+                json.dump(asdict(job), handle, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())  # survive a power cut, not just a crash
+            os.replace(tmp_name, target)
+        except BaseException:
+            Path(tmp_name).unlink(missing_ok=True)
+            raise
 
     def enqueue(self, *, path: Path, kind: str, game: str | None,
                 game_exe: str | None, captured_at: int, source_path: Path) -> Job:
@@ -84,7 +98,18 @@ class JobQueue:
         return sorted(jobs, key=lambda j: j.captured_at)
 
     def ready(self, now: float) -> list[Job]:
-        return [j for j in self.all() if j.next_attempt_at <= now]
+        """Jobs due now. `now` is wall-clock seconds (time.time()).
+
+        Deadlines are persisted, so they must be wall-clock: time.monotonic()
+        is time-since-boot on Windows, and a deadline written after days of
+        uptime would never be reached again after a reboot.
+        """
+        horizon = now + self.max_backoff_s
+        # A deadline beyond any backoff we could have scheduled means the clock
+        # moved (NTP correction, or a file from a monotonic-scheduling build).
+        # Treat it as due rather than stranding the capture forever.
+        return [j for j in self.all()
+                if j.next_attempt_at <= now or j.next_attempt_at > horizon]
 
     def reschedule(self, job: Job, now: float) -> Job:
         attempts = job.attempts + 1

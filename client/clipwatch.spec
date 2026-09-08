@@ -5,7 +5,8 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[("games.toml", "."), ("config.example.toml", ".")],
-    hiddenimports=["win32clipboard", "win32gui", "win32process", "win32con"],
+    hiddenimports=["win32clipboard", "win32gui", "win32process", "win32con",
+                   "windows_toasts"],
     hookspath=[],
     excludes=[],
 )
