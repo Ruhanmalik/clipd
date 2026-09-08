@@ -1,6 +1,7 @@
 """FastAPI application: routes, auth, and lifespan wiring."""
 from __future__ import annotations
 
+import asyncio
 import hmac
 import logging
 import sqlite3
@@ -16,6 +17,7 @@ from . import db, media, storage
 from .config import Config
 from .ids import new_id
 from .notify import human_bytes, notify_capture
+from .retention import RetentionState, sweep_loop
 from .slug import slugify_game
 
 log = logging.getLogger(__name__)
@@ -56,7 +58,18 @@ def create_app(cfg: Config) -> FastAPI:
         app.state.cfg = cfg
         app.state.conn = db.connect(cfg.data_dir / "clipd.db")
         db.init_schema(app.state.conn)
+
+        task = None
+        # SWEEP_INTERVAL_S=0 disables the sweep. Tests rely on this.
+        if cfg.sweep_interval_s > 0:
+            task = asyncio.create_task(
+                sweep_loop(app.state.conn, cfg, RetentionState())
+            )
+
         yield
+
+        if task is not None:
+            task.cancel()
         app.state.conn.close()
 
     app = FastAPI(title="clipd", lifespan=lifespan)
