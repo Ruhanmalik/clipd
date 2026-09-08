@@ -1,0 +1,16 @@
+# config.example.toml — copy to config.toml beside the exe.
+# The token is better supplied as the CLIPD_TOKEN environment variable.
+server_url = "http://midget.tail0056d7.ts.net:8000"
+
+# The OBS recording/screenshot output directory.
+watch_dir = "C:/Users/ruhan/Videos/clipd"
+
+source_host = "desktop-amtr56i"
+
+# ingest_token = "only-if-you-cannot-use-CLIPD_TOKEN"
+
+# Executables never treated as "the game". design §5.
+ignore_exes = [
+  "explorer.exe", "Discord.exe", "chrome.exe", "msedge.exe",
+  "firefox.exe", "SearchHost.exe", "ShellExperienceHost.exe",
+]
