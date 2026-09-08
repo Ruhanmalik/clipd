@@ -1,0 +1,16 @@
+# Secrets — never commit. See plan.md §4.
+.env
+
+# Runtime store: clips, screenshots, thumbnails, SQLite index.
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# macOS
+.DS_Store
