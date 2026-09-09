@@ -12,9 +12,10 @@ from typing import AsyncIterator, Literal
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError, field_validator
 
-from . import db, files, media, storage
+from . import db, files, media, storage, web
 from .config import Config
 from .ids import new_id
 from .notify import human_bytes, notify_capture
@@ -260,6 +261,12 @@ def create_app(cfg: Config) -> FastAPI:
             "used_pct": round(total / budget * 100, 2),
         }
 
+    app.mount(
+        "/static",
+        StaticFiles(directory=web.TEMPLATE_DIR.parent / "static"),
+        name="static",
+    )
     app.include_router(files.router)
+    app.include_router(web.router)
 
     return app
