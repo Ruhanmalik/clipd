@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from clipd.app import create_app
 from clipd.config import Config
 from clipd.media import ProbeResult
+from clipd import db
 
 
 @pytest.fixture
@@ -46,3 +47,22 @@ def client(cfg, monkeypatch):
 
     with TestClient(create_app(cfg), raise_server_exceptions=False) as c:
         yield c
+
+
+@pytest.fixture
+def make_clip():
+    """Build a db.Clip row. Any column can be overridden by keyword."""
+    def _make(clip_id="aB3xY9z", *, created_at=1757260800, game="Halo",
+              game_slug="halo", kind="clip", size=1000, thumb=True, **overrides):
+        row = dict(
+            id=clip_id, public_slug=None, capture_uuid=f"u-{clip_id}", kind=kind,
+            title=None, filename=f"{clip_id}.mp4",
+            rel_path=f"clips/{game_slug}/2026/09/{clip_id}.mp4", bytes=size,
+            duration_s=90.0, width=1920, height=1080, game=game,
+            game_slug=game_slug, game_exe="halo.exe", pinned=0,
+            source_host="desktop-amtr56i", created_at=created_at,
+            thumb_path=f"thumbs/{clip_id}.jpg" if thumb else None,
+        )
+        row.update(overrides)
+        return db.Clip(**row)
+    return _make
