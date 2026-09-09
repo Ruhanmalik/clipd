@@ -9,7 +9,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -54,4 +54,76 @@ async def index(request: Request) -> HTMLResponse:
         "index.html",
         games=db.list_games(conn),
         recent=db.recent_clips(conn, limit=RECENT_LIMIT),
+    )
+
+
+PAGE_SIZE = 48
+KINDS = {"clip", "screenshot"}
+
+
+def encode_cursor(clip: db.Clip) -> str:
+    """The last row of a page, as an opaque `?before=` value."""
+    return f"{clip.created_at}_{clip.id}"
+
+
+def decode_cursor(raw: str | None) -> tuple[int, str] | None:
+    """Parse `?before=`, or None if it is absent or malformed.
+
+    Malformed is not an error: the value travels in a URL people paste and
+    truncate, and the honest recovery is the first page, not a 400 on a page
+    that renders perfectly well without a cursor.
+    """
+    if not raw:
+        return None
+    created_at, _, clip_id = raw.partition("_")
+    if not created_at.isdigit() or not clip_id or "_" in clip_id:
+        return None
+    return int(created_at), clip_id
+
+
+@router.get("/g/{game_slug}", response_class=HTMLResponse)
+async def game_page(
+    request: Request,
+    game_slug: str,
+    kind: str | None = None,
+    before: str | None = None,
+) -> HTMLResponse:
+    conn: sqlite3.Connection = request.app.state.conn
+
+    # An unrecognised kind is dropped rather than rejected: it can only come
+    # from a hand-edited URL, and showing everything is a better answer than a
+    # 422 on a page that has no invalid state of its own.
+    kind = kind if kind in KINDS else None
+
+    # The unfiltered count decides the 404: a game with captures is a real
+    # page even when the current filter matches none of them.
+    total_all = db.count_by_game(conn, game_slug)
+    if total_all == 0:
+        raise HTTPException(status_code=404, detail="not found")
+    total = total_all if kind is None else db.count_by_game(
+        conn, game_slug, kind=kind
+    )
+
+    # One extra row is the cheapest "is there a next page" test there is —
+    # cheaper than a second COUNT with the cursor applied.
+    rows = db.list_by_game(
+        conn, game_slug, kind=kind,
+        before=decode_cursor(before), limit=PAGE_SIZE + 1,
+    )
+    has_more = len(rows) > PAGE_SIZE
+    clips = rows[:PAGE_SIZE]
+
+    # The heading names the game even when the filter emptied the page, so it
+    # falls back to any row rather than to the slug.
+    named = clips[0] if clips else db.list_by_game(conn, game_slug, limit=1)[0]
+
+    return page(
+        request,
+        "game.html",
+        game_slug=game_slug,
+        game_name=named.game or game_slug,
+        clips=clips,
+        kind=kind,
+        total=total,
+        next_cursor=encode_cursor(clips[-1]) if has_more and clips else None,
     )
