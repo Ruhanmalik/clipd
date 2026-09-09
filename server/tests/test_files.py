@@ -3,7 +3,6 @@ import pytest
 from clipd import db
 
 
-
 @pytest.fixture
 def stored(client, cfg, make_clip):
     """One clip whose bytes and thumbnail actually exist on disk."""
@@ -97,3 +96,13 @@ def test_screenshot_is_served_with_its_own_media_type(client, cfg, make_clip):
     response = client.get("/m/shot123")
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
+
+
+def test_a_stored_path_that_escapes_the_data_dir_is_refused(client, make_clip):
+    """rel_path is server-generated today, but it is data on disk: a restored
+    backup or a hand-edited row must not turn into an arbitrary file read."""
+    for bad in ("../../etc/passwd", "/etc/passwd", "clips/../../../etc/passwd"):
+        clip_id = f"esc{abs(hash(bad)) % 1000:03d}"
+        db.insert_clip(client.app.state.conn,
+                       make_clip(clip_id, created_at=100, rel_path=bad))
+        assert client.get(f"/m/{clip_id}").status_code == 404, bad

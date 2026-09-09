@@ -1,4 +1,3 @@
-# server/clipd/files.py
 """Routes that serve bytes: the player's source, thumbnails, and downloads.
 
 StaticFiles cannot do this job. URLs are keyed by clip id while paths are
