@@ -127,3 +127,12 @@ async def game_page(
         total=total,
         next_cursor=encode_cursor(clips[-1]) if has_more and clips else None,
     )
+
+
+@router.get("/v/{clip_id}", response_class=HTMLResponse)
+async def clip_page(request: Request, clip_id: str) -> HTMLResponse:
+    conn: sqlite3.Connection = request.app.state.conn
+    clip = db.get_by_id(conn, clip_id)
+    if clip is None:
+        raise HTTPException(status_code=404, detail="not found")
+    return page(request, "clip.html", clip=clip)
