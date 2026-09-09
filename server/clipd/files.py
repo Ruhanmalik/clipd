@@ -36,6 +36,10 @@ MEDIA_TYPES = {
 }
 FALLBACK_TYPE = "application/octet-stream"
 
+# Clip ids are never reused and a trim mints a new one, so the bytes behind
+# these two routes never change under a given id — safe to cache forever.
+IMMUTABLE_CACHE = {"Cache-Control": "public, max-age=31536000, immutable"}
+
 
 def _media_type(rel_path: str) -> str:
     return MEDIA_TYPES.get(Path(rel_path).suffix.lower(), FALLBACK_TYPE)
@@ -79,14 +83,16 @@ async def media(request: Request, clip_id: str) -> FileResponse:
     """
     clip = _lookup(request, clip_id)
     path = _existing_path(request.app.state.cfg, clip.rel_path)
-    return FileResponse(path, media_type=_media_type(clip.rel_path))
+    return FileResponse(
+        path, media_type=_media_type(clip.rel_path), headers=IMMUTABLE_CACHE
+    )
 
 
 @router.get("/t/{clip_id}")
 async def thumbnail(request: Request, clip_id: str) -> FileResponse:
     clip = _lookup(request, clip_id)
     path = _existing_path(request.app.state.cfg, clip.thumb_path)
-    return FileResponse(path, media_type="image/jpeg")
+    return FileResponse(path, media_type="image/jpeg", headers=IMMUTABLE_CACHE)
 
 
 @router.get("/d/{clip_id}")

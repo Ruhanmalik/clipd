@@ -64,9 +64,9 @@ def test_a_game_with_no_thumbnail_renders_no_broken_image(client, make_clip):
     fall back to the empty frame, not to a broken-image glyph."""
     db.insert_clip(client.app.state.conn,
                    make_clip("nothumb", created_at=1, thumb=False))
-    body = client.get("/").text
-    assert client.get("/").status_code == 200
-    assert "/t/nothumb" not in body
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "/t/nothumb" not in response.text
 
 
 def test_html_escapes_a_hostile_game_name(client, make_clip):

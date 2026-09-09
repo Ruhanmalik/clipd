@@ -1,6 +1,14 @@
 """The three binary routes: inline media, thumbnail, download."""
 import pytest
 from clipd import db
+from clipd.app import ALLOWED_EXT
+from clipd.files import MEDIA_TYPES
+
+
+def test_media_types_covers_every_extension_ingest_accepts():
+    """MEDIA_TYPES mirrors ALLOWED_EXT by hand; nothing else enforces the
+    match, so a new ingested extension could silently serve as octet-stream."""
+    assert set(MEDIA_TYPES) == set().union(*ALLOWED_EXT.values())
 
 
 @pytest.fixture
@@ -49,6 +57,12 @@ def test_thumb_serves_the_thumbnail(client, stored):
     assert response.status_code == 200
     assert response.content == b"jpegbytes"
     assert response.headers["content-type"] == "image/jpeg"
+
+
+def test_thumb_is_cacheable_forever(client, stored):
+    """Clip ids are never reused, so a thumbnail behind one never changes."""
+    response = client.get(f"/t/{stored.id}")
+    assert response.headers.get("cache-control") == "public, max-age=31536000, immutable"
 
 
 def test_download_sets_an_attachment_disposition(client, stored):
