@@ -32,14 +32,13 @@
         {% for game in games %}
           <a class="tile" href="/g/{{ game.game_slug }}">
             <div class="thumb">
-              {% if game.cover_id %}
+              {% if game.cover_thumb %}
                 <img src="/t/{{ game.cover_id }}" alt="" loading="lazy">
               {% endif %}
             </div>
-            <span class="tile-name">{{ game.game or "Unknown" }}</span>
+            <span class="tile-name">{{ game.game or UNKNOWN }}</span>
             <span class="tile-meta">
-              {{ game.clips }} capture{{ "" if game.clips == 1 else "s" }}
-              · {{ human_bytes(game.bytes) }}
+              {{ pluralize(game.clips, "capture") }} · {{ human_bytes(game.bytes) }}
             </span>
           </a>
         {% endfor %}

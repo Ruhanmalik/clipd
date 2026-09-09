@@ -28,6 +28,8 @@ templates.env.globals.update(
     human_duration=presenters.human_duration,
     human_bytes=presenters.human_bytes,
     relative_time=presenters.relative_time,
+    pluralize=presenters.pluralize,
+    UNKNOWN=presenters.UNKNOWN,
 )
 
 RECENT_LIMIT = 8

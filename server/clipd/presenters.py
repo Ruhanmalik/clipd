@@ -10,7 +10,10 @@ from .db import Clip
 from .notify import human_bytes
 
 # Re-exported so templates have a single import site for value formatting.
-__all__ = ["display_title", "human_duration", "relative_time", "human_bytes"]
+__all__ = [
+    "display_title", "human_duration", "relative_time", "human_bytes",
+    "pluralize", "UNKNOWN",
+]
 
 UNKNOWN = "Unknown"
 
@@ -40,8 +43,13 @@ def human_duration(seconds: float | None) -> str:
     return f"{minutes}:{secs:02d}"
 
 
+def pluralize(count: int, noun: str) -> str:
+    """`1 capture`, `3 captures`. Templates interpolate; they do not compute."""
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
 def _plural(count: int, unit: str) -> str:
-    return f"{count} {unit} ago" if count == 1 else f"{count} {unit}s ago"
+    return f"{pluralize(count, unit)} ago"
 
 
 def relative_time(then: int, now: int) -> str:

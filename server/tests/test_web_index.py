@@ -1,6 +1,4 @@
-# server/tests/test_web_index.py
 """GET / — the game-first landing page."""
-import pytest
 from clipd import db
 
 
@@ -61,12 +59,14 @@ def test_recent_strip_is_capped(client, make_clip):
     assert linked == 8
 
 
-def test_a_game_with_no_thumbnail_still_renders(client, make_clip):
-    """thumb_path is NULL whenever ffmpeg failed at ingest."""
+def test_a_game_with_no_thumbnail_renders_no_broken_image(client, make_clip):
+    """thumb_path is NULL whenever ffmpeg failed at ingest. The tile should
+    fall back to the empty frame, not to a broken-image glyph."""
     db.insert_clip(client.app.state.conn,
                    make_clip("nothumb", created_at=1, thumb=False))
-
+    body = client.get("/").text
     assert client.get("/").status_code == 200
+    assert "/t/nothumb" not in body
 
 
 def test_html_escapes_a_hostile_game_name(client, make_clip):
