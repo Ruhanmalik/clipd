@@ -1527,9 +1527,7 @@ async def game_page(
 {% endblock %}
 
 {% block content %}
-  <h2 class="section-title">
-    {{ total }} capture{{ "" if total == 1 else "s" }}
-  </h2>
+  <h2 class="section-title">{{ pluralize(total, "capture") }}</h2>
 
   <nav class="chips">
     <a class="chip" href="/g/{{ game_slug }}"
