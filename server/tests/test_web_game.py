@@ -1,7 +1,7 @@
 """GET /g/<game-slug> — one game's captures."""
+import html
 import re
 
-import pytest
 from clipd import db, web
 
 
@@ -66,16 +66,21 @@ def test_a_short_page_offers_no_next_link(client, make_clip):
 
 
 def test_the_next_link_returns_the_following_page(client, make_clip):
+    """Follows the link the page actually rendered, so this covers
+    encode -> render -> decode end to end rather than rebuilding the cursor
+    from the database."""
     seed(client, make_clip, web.PAGE_SIZE + 3)
 
     first = client.get("/g/halo")
-    # The oldest row on page one is the cursor; page two starts below it.
-    oldest = db.list_by_game(client.app.state.conn, "halo",
-                             limit=web.PAGE_SIZE)[-1]
-    second = client.get(f"/g/halo?before={web.encode_cursor(oldest)}")
+    match = re.search(r'href="(/g/halo\?before=[^"]*)"', first.text)
+    assert match, first.text
+    href = html.unescape(match.group(1))
+    _, oldest_id = web.decode_cursor(href.split("before=", 1)[1])
+
+    second = client.get(href)
 
     assert second.status_code == 200
-    assert f"/v/{oldest.id}" not in second.text
+    assert f"/v/{oldest_id}" not in second.text
     assert "/v/c000" in second.text
 
 
@@ -95,6 +100,17 @@ def test_a_malformed_cursor_serves_the_first_page(client, make_clip):
         response = client.get(f"/g/halo?before={bad}")
         assert response.status_code == 200, bad
         assert "/v/c002" in response.text
+
+
+def test_a_game_with_no_name_is_labelled_unknown_not_the_slug(client, make_clip):
+    """spec §5 makes Unknown a normal tile and the re-tagging queue, so this is
+    the game page most likely to be visited."""
+    db.insert_clip(client.app.state.conn,
+                   make_clip("noname1", created_at=100, game=None,
+                             game_slug="unknown"))
+    body = client.get("/g/unknown").text
+    assert "Unknown" in body
+    assert "<strong>unknown</strong>" not in body
 
 
 def test_cursor_roundtrips(make_clip):

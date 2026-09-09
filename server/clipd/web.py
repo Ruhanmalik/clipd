@@ -18,6 +18,7 @@ from . import db, presenters
 router = APIRouter()
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = Path(__file__).parent / "static"
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 # Registered as globals rather than passed per-render: every page needs them,
@@ -35,14 +36,19 @@ templates.env.globals.update(
 RECENT_LIMIT = 8
 
 
-def page(request: Request, name: str, **context) -> HTMLResponse:
+def page(
+    request: Request, name: str, *, status_code: int = 200, **context
+) -> HTMLResponse:
     """Render a template with the context every page needs.
 
     `now` is resolved once per request and passed down, so relative_time stays
     pure and two timestamps on the same page cannot disagree.
     """
     return templates.TemplateResponse(
-        request=request, name=name, context={"now": int(time.time()), **context}
+        request=request,
+        name=name,
+        context={"now": int(time.time()), **context},
+        status_code=status_code,
     )
 
 
@@ -114,18 +120,22 @@ async def game_page(
     clips = rows[:PAGE_SIZE]
 
     # The heading names the game even when the filter emptied the page, so it
-    # falls back to any row rather than to the slug.
-    named = clips[0] if clips else db.list_by_game(conn, game_slug, limit=1)[0]
+    # falls back to any row rather than to the slug. Reuse what we already
+    # fetched when possible; the extra query only runs when the filter (or a
+    # mid-flight sweep) has emptied this page, and its result is indexed
+    # safely so it can never raise.
+    fallback = clips or db.list_by_game(conn, game_slug, limit=1)
+    named = fallback[0] if fallback else None
 
     return page(
         request,
         "game.html",
         game_slug=game_slug,
-        game_name=named.game or game_slug,
+        game_name=(named.game if named else None) or presenters.UNKNOWN,
         clips=clips,
         kind=kind,
         total=total,
-        next_cursor=encode_cursor(clips[-1]) if has_more and clips else None,
+        next_cursor=encode_cursor(clips[-1]) if has_more else None,
     )
 
 

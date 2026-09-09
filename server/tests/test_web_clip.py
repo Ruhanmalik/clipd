@@ -6,6 +6,30 @@ def test_unknown_clip_is_404(client):
     assert client.get("/v/nope123").status_code == 404
 
 
+def test_unknown_clip_renders_html_for_a_browser(client):
+    """A swept clip's link outlives it in ntfy history and on the clipboard,
+    so this is a normal destination, not just a typo."""
+    response = client.get("/v/nope123", headers={"Accept": "text/html"})
+
+    assert response.status_code == 404
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_unknown_clip_without_an_html_accept_header_stays_json(client):
+    response = client.get("/v/nope123", headers={"Accept": "application/json"})
+
+    assert response.status_code == 404
+    assert "application/json" in response.headers["content-type"]
+
+
+def test_a_byte_route_404_stays_json(client):
+    """The player and the ingest contract must never gain an HTML body."""
+    response = client.get("/m/nope123")
+
+    assert response.status_code == 404
+    assert "application/json" in response.headers["content-type"]
+
+
 def test_a_clip_renders_a_video_player_pointed_at_the_media_route(client, make_clip):
     db.insert_clip(client.app.state.conn, make_clip("aB3xY9z", created_at=100))
 

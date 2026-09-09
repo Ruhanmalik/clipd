@@ -3,10 +3,11 @@
 {% block title %}{{ game_name }} · clipd{% endblock %}
 
 {% block subnav %}
-  <span class="crumb">/ <strong>{{ game_name }}</strong></span>
+  <span class="crumb">/ <a href="/">{{ game_name }}</a></span>
 {% endblock %}
 
 {% block content %}
+  <h1 class="detail-title">{{ game_name }}</h1>
   <h2 class="section-title">{{ pluralize(total, "capture") }}</h2>
 
   <nav class="chips">
@@ -19,7 +20,11 @@
   </nav>
 
   {% if not clips %}
-    <p class="empty">Nothing here with that filter.</p>
+    {% if kind %}
+      <p class="empty">Nothing here with that filter.</p>
+    {% else %}
+      <p class="empty">Nothing more to show. <a href="/g/{{ game_slug }}">Back to the first page</a>.</p>
+    {% endif %}
   {% else %}
     <div class="cards">
       {% for clip in clips %}

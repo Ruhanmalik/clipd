@@ -11,9 +11,11 @@ from pathlib import Path
 from typing import AsyncIterator, Literal
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError, field_validator
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import db, files, media, storage, web
 from .config import Config
@@ -261,9 +263,17 @@ def create_app(cfg: Config) -> FastAPI:
             "used_pct": round(total / budget * 100, 2),
         }
 
+    @app.exception_handler(StarletteHTTPException)
+    async def _html_not_found(request: Request, exc: StarletteHTTPException):
+        # A swept clip's /v/<id> link outlives it in ntfy history and on the
+        # clipboard, so this is a normal destination, not just a typo.
+        if exc.status_code == 404 and "text/html" in request.headers.get("accept", ""):
+            return web.page(request, "404.html", status_code=404)
+        return await http_exception_handler(request, exc)
+
     app.mount(
         "/static",
-        StaticFiles(directory=web.TEMPLATE_DIR.parent / "static"),
+        StaticFiles(directory=web.STATIC_DIR),
         name="static",
     )
     app.include_router(files.router)
