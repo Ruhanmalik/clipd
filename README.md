@@ -7,9 +7,10 @@ indexed, thumbnailed, announced on ntfy, and returned as a short URL. The server
 never transcodes: the capture client encodes and remuxes, and clipd's only video
 work is extracting one thumbnail frame.
 
-This repository implements **Step 1** (the ingest server) and **Step 2** (the
-capture client). See `plan.md` for the north-star spec and `docs/superpowers/`
-for the design and implementation plans.
+This repository implements **Step 1** (the ingest server), **Step 2** (the
+capture client), and **Step 3a** (the read-only web UI). See `plan.md` for the
+north-star spec and `docs/superpowers/` for the design and implementation
+plans.
 
 ## Layout
 - `server/` — the FastAPI ingest service (Steps 1 and 3a)
