@@ -237,6 +237,53 @@ title when `plan.md` §7 sharing is switched on.
 
 ---
 
+## 8a. Step 3 scope decisions (2026-09-09)
+
+Resolved when Step 3 implementation planning began. These extend §8; where they
+differ from it, these win.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 1 | **Step 3 splits into 3a and 3b**, each its own branch and PR | §6 lists eleven routes, roughly double either shipped step. 3a is read-only and produces something visible on its own. |
+| 2 | **Dark, media-forward presentation** | The thumbnail is the content; chrome stays out of its way. Sits beside Jellyfin on the same tailnet without looking foreign. |
+| 3 | **The PWA shell is deferred** (moved to §10) | Installability is additive and needs real icon assets. Nothing about deferring it forces a rewrite. |
+| 4 | **Re-tagging offers to re-map every clip sharing the same `game_exe`** | That is what `game_exe` is for (§3). It makes the `Unknown` re-tagging queue (§5) drainable in a few clicks rather than one clip at a time. |
+
+### 3a — read-only (first branch)
+
+`GET /`, `GET /g/<game-slug>`, `GET /v/<id>`, `GET /d/<id>`, the Jinja2 template
+layer, and the read-side query functions in `db.py`.
+
+Two routes §6 does not list are required, and land here:
+
+- **`GET /m/<id>`** — the player's media source, served **inline with HTTP Range
+  support**. `/d/<id>` sets `Content-Disposition: attachment`, so it cannot double
+  as a `<video>` source: without Range the player cannot seek.
+- **`GET /t/<id>`** — the thumbnail.
+
+Serving `data/` through StaticFiles is not an option: URLs are keyed by `id` while
+paths are game-sharded, and a re-tag moves the file (§3).
+
+`/g/<game-slug>` paginates by **keyset on `created_at`**, not offset. The store is
+capped at 50 GB (§7), but that is still potentially thousands of rows, and an
+offset scan degrades as the library grows.
+
+### 3b — mutations (second branch)
+
+`PATCH /api/clips/<id>` (including the `game_exe` bulk re-map), `DELETE
+/api/clips/<id>`, `POST /api/clips/bulk-delete`, `POST /api/clips/<id>/trim`,
+`POST /api/clips/<id>/share`, `GET /c/<slug>`, and the UI controls that drive them.
+
+### Authentication
+
+Every Step 3 route carries `tailnet` in §6's auth column, and that means exactly
+what it says: **no application-level auth**. Tailscale is the entire boundary.
+That includes the destructive routes in 3b — anything on the tailnet can delete
+any clip. Accepted deliberately for a single-operator homelab; revisit before the
+Cloudflare Tunnel in `plan.md` §7 exposes anything beyond `/c/*`.
+
+---
+
 ## 9. Step 1 — definition of done
 
 Ships: `POST /ingest` (bearer auth, streaming write, ffprobe, thumbnail, SQLite
@@ -265,6 +312,7 @@ schema and storage layout land in Step 1, so Step 3 needs no migration.
 
 - `parent_id` linking a trimmed clip to its source. Not needed until trims are common.
 - Public sharing (`plan.md` §7) — routes built, flag off, no Cloudflare Tunnel yet.
+- The PWA shell itself — `manifest.json`, icons, service worker (§8a #3).
 - Desktop shell (Tauri) wrapping the PWA.
 - Homepage tile and Uptime Kuma monitor (`plan.md` §9 Step 4) — note that adding the
   tile requires updating `HOMEPAGE_ALLOWED_HOSTS` (`plan.md` §10).
