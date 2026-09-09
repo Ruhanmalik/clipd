@@ -48,12 +48,18 @@ def test_detail_page_shows_resolution_duration_and_size(client, make_clip):
 
 
 def test_a_clip_with_no_probe_data_still_renders(client, make_clip):
-    """ffprobe can fail at ingest; those columns are nullable for that reason."""
+    """ffprobe can fail at ingest; those columns are nullable for that reason.
+    The rows should be omitted, not rendered as None."""
     clip = make_clip("sparse1", created_at=100, duration_s=None,
                      width=None, height=None)
     db.insert_clip(client.app.state.conn, clip)
 
-    assert client.get("/v/sparse1").status_code == 200
+    response = client.get("/v/sparse1")
+
+    assert response.status_code == 200
+    assert "None" not in response.text
+    assert "Duration" not in response.text
+    assert "Resolution" not in response.text
 
 
 def test_detail_page_escapes_a_hostile_title(client, make_clip):
