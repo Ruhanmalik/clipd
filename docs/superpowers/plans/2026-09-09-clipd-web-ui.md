@@ -843,7 +843,7 @@ This task carries the scaffolding the next two reuse: the Jinja environment, the
 - Produces:
   - `web.router: APIRouter` serving `GET /`
   - `web.templates: Jinja2Templates` — the shared environment, with the presenters registered as globals
-  - `web.page(request, name, **context) -> Response` — the one place `now` and `cfg` enter a template context
+  - `web.page(request, name, **context) -> Response` — the one place `now` enters a template context. It deliberately does NOT thread `cfg`: no 3a template needs it, and `cfg.base_url` matters only for the absolute OpenGraph URLs on 3b's `/c/<slug>`.
 
 - [ ] **Step 1: Add the dependency**
 
@@ -1798,7 +1798,9 @@ git push origin feat/clipd-web-ui
 
 ### Task 7: Ship the templates in the image, and document the routes
 
-The Dockerfile installs with `pip install .` (`server/Dockerfile:13`). `setuptools.packages.find` collects Python modules only — `templates/` and `static/` are data, so without an explicit declaration they are absent from the installed package. Every test passes locally, the image builds clean, and the container 500s on its first page render. This task closes that gap and updates the docs.
+The Dockerfile installs with `pip install .` (`server/Dockerfile:13`). `setuptools.packages.find` collects Python modules only — `templates/` and `static/` are data, so without an explicit declaration they are absent from the installed package.
+
+**This is a startup crash, not a degraded page.** `app.py` constructs `StaticFiles(directory=...)` inside `create_app`, and Starlette's `StaticFiles.__init__` raises `RuntimeError: Directory '...' does not exist` immediately when the directory is missing — verified against the installed Starlette. So the container dies on boot, the healthcheck never passes, and compose restarts it forever. Every test passes locally and the image builds clean, because the source tree is importable in development either way. This task is the only thing standing between the branch and a dead deploy.
 
 **Files:**
 - Modify: `server/pyproject.toml` (package-data), `README.md` (route table, Step status)
