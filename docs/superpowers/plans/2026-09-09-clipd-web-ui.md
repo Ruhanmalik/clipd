@@ -1253,7 +1253,11 @@ a { color: inherit; text-decoration: none; }
 
 - [ ] **Step 8: Mount the templates and static files**
 
-In `server/clipd/app.py`, extend the import at line 17 and add the mount. Full set of edits:
+Task 3 already registered `files.router`. Do **not** register it again — a
+second `include_router` for the same router duplicates every `/m`, `/t`, `/d`
+route. This step adds only the static mount and the web router.
+
+In `server/clipd/app.py`, extend the import line Task 3 edited:
 
 ```python
 from fastapi.staticfiles import StaticFiles
@@ -1261,7 +1265,7 @@ from fastapi.staticfiles import StaticFiles
 from . import db, files, media, storage, web
 ```
 
-and before `return app`:
+and extend the block Task 3 added before `return app`, so it reads:
 
 ```python
     app.mount(
@@ -1269,7 +1273,7 @@ and before `return app`:
         StaticFiles(directory=web.TEMPLATE_DIR.parent / "static"),
         name="static",
     )
-    app.include_router(files.router)
+    app.include_router(files.router)   # added by Task 3 — leave it as it is
     app.include_router(web.router)
 
     return app
@@ -1428,11 +1432,16 @@ Expected: FAIL — `AttributeError: module 'clipd.web' has no attribute 'PAGE_SI
 
 - [ ] **Step 3: Add the route and cursor helpers**
 
-Append to `server/clipd/web.py`:
+Extend the existing FastAPI import at the top of `server/clipd/web.py` — do
+not append a second import line further down the module:
 
 ```python
-from fastapi import HTTPException
+from fastapi import APIRouter, HTTPException, Request
+```
 
+Then append to the same file:
+
+```python
 PAGE_SIZE = 48
 KINDS = {"clip", "screenshot"}
 
