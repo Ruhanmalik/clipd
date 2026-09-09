@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}{{ game_name }} · clipd{% endblock %}
+
+{% block subnav %}
+  <span class="crumb">/ <strong>{{ game_name }}</strong></span>
+{% endblock %}
+
+{% block content %}
+  <h2 class="section-title">{{ pluralize(total, "capture") }}</h2>
+
+  <nav class="chips">
+    <a class="chip" href="/g/{{ game_slug }}"
+       aria-current="{{ 'true' if not kind else 'false' }}">All</a>
+    <a class="chip" href="/g/{{ game_slug }}?kind=clip"
+       aria-current="{{ 'true' if kind == 'clip' else 'false' }}">Clips</a>
+    <a class="chip" href="/g/{{ game_slug }}?kind=screenshot"
+       aria-current="{{ 'true' if kind == 'screenshot' else 'false' }}">Screenshots</a>
+  </nav>
+
+  {% if not clips %}
+    <p class="empty">Nothing here with that filter.</p>
+  {% else %}
+    <div class="cards">
+      {% for clip in clips %}
+        <a class="card" href="/v/{{ clip.id }}">
+          <div class="thumb">
+            {% if clip.thumb_path %}
+              <img src="/t/{{ clip.id }}" alt="" loading="lazy">
+            {% endif %}
+            {% if clip.duration_s %}
+              <span class="badge">{{ human_duration(clip.duration_s) }}</span>
+            {% endif %}
+          </div>
+          <span class="card-name">{{ display_title(clip) }}</span>
+          <span class="card-meta">
+            {{ relative_time(clip.created_at, now) }} · {{ human_bytes(clip.bytes) }}
+          </span>
+        </a>
+      {% endfor %}
+    </div>
+
+    {% if next_cursor %}
+      <div class="pager">
+        <a class="button"
+           href="/g/{{ game_slug }}?before={{ next_cursor }}{% if kind %}&amp;kind={{ kind }}{% endif %}">
+          Older
+        </a>
+      </div>
+    {% endif %}
+  {% endif %}
+{% endblock %}
