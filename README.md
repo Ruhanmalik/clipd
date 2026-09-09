@@ -12,23 +12,31 @@ capture client). See `plan.md` for the north-star spec and `docs/superpowers/`
 for the design and implementation plans.
 
 ## Layout
-- `server/` — the FastAPI ingest service (Step 1)
+- `server/` — the FastAPI ingest service (Steps 1 and 3a)
 - `client/` — `clipwatch`, the OBS watcher for the gaming PC (Step 2). See `client/README.md`.
 - `docker-compose.yml` — deploys to `/home/<user>/clipd/` on clipd-server
 - `.env.example` — copy to `.env`, fill in, never commit
 
-## Endpoints (Step 1)
+## Endpoints
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | POST | `/ingest` | Bearer | multipart `file` + JSON `meta`. Returns `{id, url}`. Idempotent on `capture_uuid`. |
 | GET | `/healthz` | none | `{status, clips, bytes, budget_bytes, used_pct}` for Uptime Kuma |
+| GET | `/` | tailnet | Game tiles + a Recent strip |
+| GET | `/g/<game-slug>` | tailnet | One game's captures; `?kind=clip\|screenshot`, `?before=<cursor>` |
+| GET | `/v/<id>` | tailnet | Detail page and player — the URL the watcher puts on the clipboard |
+| GET | `/m/<id>` | tailnet | The media itself, inline and Range-capable |
+| GET | `/t/<id>` | tailnet | Thumbnail |
+| GET | `/d/<id>` | tailnet | Download the original |
 
 `meta` requires `kind`, `capture_uuid`, and `source_host`; `game`, `game_exe`,
 `title`, and `captured_at` are optional. (The example in `plan.md` §9 predates
 `capture_uuid` and now returns 422.)
 
-The gallery, `/v/<id>`, trim, and the dormant share routes are Step 3. The schema
-and storage layout already accommodate them, so Step 3 needs no migration.
+The tailnet routes carry no application-level auth: Tailscale is the boundary.
+See the design spec §8a.
+
+Editing, trimming, deleting, and the dormant share routes are Step 3b.
 
 ## Development
     cd server && pip install -e ".[dev]" && python -m pytest

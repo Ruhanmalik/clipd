@@ -20,5 +20,12 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["clipd*"]
 
+# templates/ and static/ are data, not modules, so packages.find does not
+# collect them. The Dockerfile installs with `pip install .`, so without this
+# the image ships a clipd that 500s on its first page render — and nothing in
+# local development would catch it, because the source tree is importable.
+[tool.setuptools.package-data]
+clipd = ["templates/*.html", "static/*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
