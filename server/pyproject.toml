@@ -22,7 +22,8 @@ include = ["clipd*"]
 
 # templates/ and static/ are data, not modules, so packages.find does not
 # collect them. The Dockerfile installs with `pip install .`, so without this
-# the image ships a clipd that 500s on its first page render — and nothing in
+# StaticFiles raises RuntimeError inside create_app on the missing directory —
+# the container dies on boot and compose restarts it forever — and nothing in
 # local development would catch it, because the source tree is importable.
 [tool.setuptools.package-data]
 clipd = ["templates/*.html", "static/*"]
