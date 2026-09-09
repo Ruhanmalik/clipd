@@ -45,21 +45,22 @@ async def write_stream(dest: Path, chunks: AsyncIterator[bytes]) -> int:
 
 
 def resolve_capture(data_dir: Path, rel_path: str) -> Path:
-    """Resolve rel_path under data_dir, refusing anything that escapes it.
+    """Resolve rel_path under data_dir, refusing anything that escapes it —
+    or that resolves to the store root itself.
 
     Every route that serves bytes goes through this. `Path("/data") / "/etc/x"`
     is `/etc/x`, so an absolute or traversing component silently escapes the
     store without the containment check.
     """
-    if not rel_path:
-        # `data_dir / ""` is data_dir itself, which passes the containment
-        # check by equality. A caller that lost a path must not be handed the
-        # whole store — move_capture would replace() it.
-        raise ValueError("rel_path is empty")
     root = data_dir.resolve()
     target = (data_dir / rel_path).resolve()
     if not target.is_relative_to(root):
         raise ValueError(f"path escapes the data directory: {rel_path!r}")
+    if target == root:
+        # "", ".", "clips/.." all land here, and equality passes the check
+        # above. A caller that lost its path must not be handed the whole
+        # store: move_capture would replace() it.
+        raise ValueError(f"path resolves to the store root: {rel_path!r}")
     return target
 
 
