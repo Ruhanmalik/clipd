@@ -108,6 +108,7 @@ class GameSummary:
     bytes: int
     latest_at: int
     cover_id: str | None
+    cover_thumb: str | None
 
 
 def _to_clips(cur: sqlite3.Cursor) -> list[Clip]:
@@ -117,15 +118,16 @@ def _to_clips(cur: sqlite3.Cursor) -> list[Clip]:
 def list_games(conn: sqlite3.Connection) -> list[GameSummary]:
     """One row per game, newest activity first.
 
-    `game` and `id` are bare columns beside MAX(created_at). SQLite documents
-    these as taking their values from the row that produced the maximum, which
-    is exactly the cover we want — the newest capture — without a correlated
-    subquery per game.
+    `game`, `id`, and `thumb_path` are bare columns beside MAX(created_at).
+    SQLite documents these as taking their values from the row that produced
+    the maximum, which is exactly the cover we want — the newest capture —
+    without a correlated subquery per game.
     """
     cur = conn.execute("""
         SELECT game_slug,
                game,
                id                       AS cover_id,
+               thumb_path               AS cover_thumb,
                COUNT(*)                 AS clips,
                COALESCE(SUM(bytes), 0)  AS total_bytes,
                MAX(created_at)          AS latest_at
@@ -141,6 +143,7 @@ def list_games(conn: sqlite3.Connection) -> list[GameSummary]:
             bytes=int(row["total_bytes"]),
             latest_at=int(row["latest_at"]),
             cover_id=row["cover_id"],
+            cover_thumb=row["cover_thumb"],
         )
         for row in cur.fetchall()
     ]

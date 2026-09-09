@@ -55,3 +55,12 @@ def test_relative_time_does_not_report_the_future_as_ago():
 
 def test_human_bytes_is_reexported():
     assert presenters.human_bytes(1024) == "1.0 KB"
+
+
+@pytest.mark.parametrize("count,expected", [
+    (0, "0 captures"),
+    (1, "1 capture"),
+    (2, "2 captures"),
+])
+def test_pluralize(count, expected):
+    assert presenters.pluralize(count, "capture") == expected

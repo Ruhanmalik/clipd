@@ -49,6 +49,13 @@ def test_list_games_covers_with_the_newest_clip(conn, make_clip):
     assert halo.cover_id == "new"
 
 
+def test_list_games_reports_whether_the_cover_has_a_thumbnail(conn, make_clip):
+    add(conn, make_clip("nothumb", created_at=100, thumb=False))
+    (game,) = db.list_games(conn)
+    assert game.cover_id == "nothumb"
+    assert game.cover_thumb is None
+
+
 def test_list_games_is_empty_on_an_empty_store(conn):
     assert db.list_games(conn) == []
 
