@@ -74,6 +74,7 @@ def test_remove_capture_is_safe_when_file_is_already_gone(tmp_path):
     remove_capture(tmp_path, "clips/halo/2026/09/missing.mp4")  # must not raise
 
 
-def test_resolve_capture_refuses_an_empty_path(tmp_path):
+@pytest.mark.parametrize("rel_path", ["", ".", "./", "clips/..", "clips/../."])
+def test_resolve_capture_refuses_the_store_root(tmp_path, rel_path):
     with pytest.raises(ValueError):
-        storage.resolve_capture(tmp_path, "")
+        storage.resolve_capture(tmp_path, rel_path)
