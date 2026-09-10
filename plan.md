@@ -277,6 +277,11 @@ curl -H "Authorization: Bearer $TOKEN" -F file=@test.mp4 \
 
 Steps 1 and 3 are the interesting engineering. Step 2 is mostly glue.
 
+**Status (2026-09-10):** Steps 1, 2 and 3a are implemented and merged, and
+Step 4 is live on clipd-server — Homepage tile, Kuma monitor, and the retention sweep
+running at 900 s. Step 3b (trim, delete, share pages) is the remainder. Step 2
+has never run on the gaming PC; see §12.
+
 ---
 
 ## 10. Gotchas found on the actual hardware
@@ -290,11 +295,23 @@ Steps 1 and 3 are the interesting engineering. Step 2 is mostly glue.
 - **Trim with `-c copy` snaps to keyframes.** In/out points will land on the
   nearest keyframe, not the exact frame. That's the correct tradeoff — it's
   instant and lossless. Only re-encode if frame-exact trimming is ever required.
-- **Adding clipd to Homepage requires updating `HOMEPAGE_ALLOWED_HOSTS`** in
-  `/home/<user>/homepage/docker-compose.yml` — Homepage rejects requests whose
-  Host header isn't listed, and the list currently includes the Tailscale name,
-  LAN IP, and localhost.
-- **Uptime Kuma monitor:** use an HTTP check against a `/healthz` endpoint.
+- **Homepage tiles: put the host IP in `siteMonitor`, not the container name.**
+  clipd runs on its own `clipd_default` compose network while Homepage sits on
+  `jellyfin_media`, so `http://clipd:8000` does not resolve from Homepage. Use
+  `http://<host-lan-ip>:8000/healthz`, the way the AdGuard, Uptime Kuma and
+  Minecraft tiles already do. Homepage hot-reloads `services.yaml`, so no
+  restart is needed.
+  (An earlier draft of this section said the tile required adding clipd to
+  `HOMEPAGE_ALLOWED_HOSTS`. It does not. Every entry in that variable is a
+  `:3000` address, because it controls which Host headers Homepage accepts for
+  its *own* UI. Adding the tile on 2026-09-10 needed no change to it.)
+- **Uptime Kuma monitor:** clipd uses a *keyword* check against
+  `http://host.docker.internal:8000/healthz` asserting `"status":"ok"`, not a
+  bare HTTP check — a 200 carrying a broken body would otherwise read as
+  healthy. This mirrors the existing Jellyfin monitor. The clipd monitor was
+  added by inserting a row straight into Kuma's SQLite database and restarting
+  the container; back the database up first, and expect the restart to be
+  required before the new monitor starts beating.
   (Note the existing Minecraft monitor deliberately uses the Docker-container
   monitor type instead of a port ping — a ping would wake itzg's autopause every
   heartbeat. Not an issue for clipd, but it's the house style to think about it.)
@@ -303,9 +320,32 @@ Steps 1 and 3 are the interesting engineering. Step 2 is mostly glue.
 
 ---
 
-## 11. Open questions for the next session
+## 11. Decisions made
 
-1. Go or Python for clipd? (Go = single binary, tiny container. Python = faster to write.)
-2. Is the gaming PC Windows or Linux? Only affects the watcher + OBS vs `gpu-screen-recorder`.
-3. Retention budget — how many GB of clips is acceptable against 254G free and shrinking?
-4. Should screenshots and clips share one gallery or be separate tabs?
+The four questions this section originally asked are all settled by Steps 1-3a.
+
+1. **Go or Python?** Python — FastAPI, Jinja, SQLite. Faster to write, and the
+   server does no video work heavier than one ffmpeg thumbnail call, so the
+   single-binary argument for Go never paid for itself.
+2. **Windows or Linux on the gaming PC?** Windows, so the watcher is
+   `clipwatch` against OBS rather than `gpu-screen-recorder`, with everything
+   OS-specific behind one `PlatformAdapter`.
+3. **Retention budget?** 50 GB (`MAX_STORE_BYTES`), swept oldest-first on a
+   900 s interval. Live since 2026-09-10.
+4. **One gallery or separate tabs?** One gallery. `/g/<slug>` carries
+   All / Clips / Screenshots filter pills instead of splitting the route.
+
+## 12. Still open
+
+- **`platform/windows.py` has never executed.** Port 22 on the gaming PC was
+  closed throughout Steps 2 and 3, so the clipboard, toast and
+  foreground-window code is reviewed but unrun, and the exe is unbuilt
+  (PyInstaller does not cross-compile). Nothing has ever been captured by a
+  hotkey. The highest-value thing to check first: an elevated anti-cheat game
+  may deny `psutil` process access, which would file every capture as
+  `Unknown` behind a debug log.
+- **No test crosses the client/server seam.** `clipwatch.upload()` is tested
+  against a hand-written mock transport and `/ingest` against a hand-built
+  request, so a contract drift between the two would leave both suites green.
+- **Step 3b** — trim, delete, and whether the dormant share routes are ever
+  switched on.
