@@ -44,18 +44,23 @@ async def write_stream(dest: Path, chunks: AsyncIterator[bytes]) -> int:
     return total
 
 
-def _resolve_inside(data_dir: Path, rel_path: str) -> Path:
-    """Resolve rel_path under data_dir, refusing anything that escapes it.
+def resolve_capture(data_dir: Path, rel_path: str) -> Path:
+    """Resolve rel_path under data_dir, refusing anything that escapes it —
+    or that resolves to the store root itself.
 
-    Not reachable from /ingest, where rel_path is server-generated. It becomes
-    reachable with Step 3's PATCH/DELETE routes, which act on stored paths.
-    Note `Path("/data") / "/etc/x"` is `/etc/x`, so an absolute component
-    silently escapes without this check.
+    Every route that serves bytes goes through this. `Path("/data") / "/etc/x"`
+    is `/etc/x`, so an absolute or traversing component silently escapes the
+    store without the containment check.
     """
     root = data_dir.resolve()
     target = (data_dir / rel_path).resolve()
     if not target.is_relative_to(root):
         raise ValueError(f"path escapes the data directory: {rel_path!r}")
+    if target == root:
+        # "", ".", "clips/.." all land here, and equality passes the check
+        # above. A caller that lost its path must not be handed the whole
+        # store: move_capture would replace() it.
+        raise ValueError(f"path resolves to the store root: {rel_path!r}")
     return target
 
 
@@ -71,14 +76,14 @@ def _prune_empty_parents(data_dir: Path, path: Path) -> None:
 
 
 def move_capture(data_dir: Path, old_rel: str, new_rel: str) -> None:
-    old = _resolve_inside(data_dir, old_rel)
-    new = _resolve_inside(data_dir, new_rel)
+    old = resolve_capture(data_dir, old_rel)
+    new = resolve_capture(data_dir, new_rel)
     new.parent.mkdir(parents=True, exist_ok=True)
     old.replace(new)
     _prune_empty_parents(data_dir, old)
 
 
 def remove_capture(data_dir: Path, rel_path: str) -> None:
-    target = _resolve_inside(data_dir, rel_path)
+    target = resolve_capture(data_dir, rel_path)
     target.unlink(missing_ok=True)
     _prune_empty_parents(data_dir, target)

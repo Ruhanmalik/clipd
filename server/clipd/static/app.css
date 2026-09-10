@@ -1,0 +1,160 @@
+/* Dark and media-forward (spec §8a #2): the thumbnail is the content, so the
+   chrome stays quiet and the grid does the talking. One file, no framework —
+   the whole UI is three pages. */
+
+:root {
+  --bg: #0b0d10;
+  --surface: #14181d;
+  --surface-hi: #1c2128;
+  --line: #262c34;
+  --text: #e6e9ee;
+  --muted: #8b95a3;
+  --accent: #5aa9ff;
+  --radius: 10px;
+  --gap: 18px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand { font-weight: 650; letter-spacing: -0.01em; }
+.crumb { color: var(--muted); }
+.crumb strong { color: var(--text); font-weight: 600; }
+
+.page { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+
+.empty { color: var(--muted); padding: 64px 0; text-align: center; }
+
+/* A thumbnail is 16:9 whether or not an image loaded, so a failed thumbnail
+   leaves a hole of the right shape instead of collapsing the grid row. */
+.thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-hi);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.strip { margin-bottom: 32px; }
+.strip-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 210px;
+  gap: var(--gap);
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+}
+.strip-name { display: block; margin-top: 8px; font-size: 14px; }
+.strip-when { display: block; color: var(--muted); font-size: 13px; }
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap);
+}
+.tile-name { display: block; margin-top: 8px; font-weight: 550; }
+.tile-meta { display: block; color: var(--muted); font-size: 13px; }
+
+.tile:hover .thumb,
+.strip-item:hover .thumb,
+.card:hover .thumb { outline: 2px solid var(--accent); }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--gap);
+}
+.card-name { display: block; margin-top: 8px; font-size: 14px; }
+.card-meta { display: block; color: var(--muted); font-size: 13px; }
+
+.chips { display: flex; gap: 8px; margin-bottom: 18px; }
+.chip {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.chip[aria-current="true"] {
+  background: var(--surface-hi);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.player { width: 100%; max-height: 76vh; background: #000; border-radius: var(--radius); overflow: hidden; }
+.player img { max-height: 76vh; width: auto; max-width: 100%; margin: 0 auto; display: block; }
+
+.detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 18px 0 6px;
+  flex-wrap: wrap;
+}
+.detail-title { margin: 0; font-size: 21px; font-weight: 600; }
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 18px;
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+.detail-meta dt { color: var(--muted); }
+.detail-meta dd { margin: 0 14px 0 0; color: var(--text); }
+
+.actions { display: flex; gap: 10px; }
+.button {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-hi);
+  font-size: 14px;
+}
+.button:hover { border-color: var(--accent); }
+
+.pager { display: flex; justify-content: center; padding: 28px 0 8px; }

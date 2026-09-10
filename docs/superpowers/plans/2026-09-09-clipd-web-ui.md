@@ -843,7 +843,7 @@ This task carries the scaffolding the next two reuse: the Jinja environment, the
 - Produces:
   - `web.router: APIRouter` serving `GET /`
   - `web.templates: Jinja2Templates` — the shared environment, with the presenters registered as globals
-  - `web.page(request, name, **context) -> Response` — the one place `now` and `cfg` enter a template context
+  - `web.page(request, name, **context) -> Response` — the one place `now` enters a template context. It deliberately does NOT thread `cfg`: no 3a template needs it, and `cfg.base_url` matters only for the absolute OpenGraph URLs on 3b's `/c/<slug>`.
 
 - [ ] **Step 1: Add the dependency**
 
@@ -1253,7 +1253,11 @@ a { color: inherit; text-decoration: none; }
 
 - [ ] **Step 8: Mount the templates and static files**
 
-In `server/clipd/app.py`, extend the import at line 17 and add the mount. Full set of edits:
+Task 3 already registered `files.router`. Do **not** register it again — a
+second `include_router` for the same router duplicates every `/m`, `/t`, `/d`
+route. This step adds only the static mount and the web router.
+
+In `server/clipd/app.py`, extend the import line Task 3 edited:
 
 ```python
 from fastapi.staticfiles import StaticFiles
@@ -1261,7 +1265,7 @@ from fastapi.staticfiles import StaticFiles
 from . import db, files, media, storage, web
 ```
 
-and before `return app`:
+and extend the block Task 3 added before `return app`, so it reads:
 
 ```python
     app.mount(
@@ -1269,7 +1273,7 @@ and before `return app`:
         StaticFiles(directory=web.TEMPLATE_DIR.parent / "static"),
         name="static",
     )
-    app.include_router(files.router)
+    app.include_router(files.router)   # added by Task 3 — leave it as it is
     app.include_router(web.router)
 
     return app
@@ -1428,11 +1432,16 @@ Expected: FAIL — `AttributeError: module 'clipd.web' has no attribute 'PAGE_SI
 
 - [ ] **Step 3: Add the route and cursor helpers**
 
-Append to `server/clipd/web.py`:
+Extend the existing FastAPI import at the top of `server/clipd/web.py` — do
+not append a second import line further down the module:
 
 ```python
-from fastapi import HTTPException
+from fastapi import APIRouter, HTTPException, Request
+```
 
+Then append to the same file:
+
+```python
 PAGE_SIZE = 48
 KINDS = {"clip", "screenshot"}
 
@@ -1518,9 +1527,7 @@ async def game_page(
 {% endblock %}
 
 {% block content %}
-  <h2 class="section-title">
-    {{ total }} capture{{ "" if total == 1 else "s" }}
-  </h2>
+  <h2 class="section-title">{{ pluralize(total, "capture") }}</h2>
 
   <nav class="chips">
     <a class="chip" href="/g/{{ game_slug }}"
@@ -1789,7 +1796,9 @@ git push origin feat/clipd-web-ui
 
 ### Task 7: Ship the templates in the image, and document the routes
 
-The Dockerfile installs with `pip install .` (`server/Dockerfile:13`). `setuptools.packages.find` collects Python modules only — `templates/` and `static/` are data, so without an explicit declaration they are absent from the installed package. Every test passes locally, the image builds clean, and the container 500s on its first page render. This task closes that gap and updates the docs.
+The Dockerfile installs with `pip install .` (`server/Dockerfile:13`). `setuptools.packages.find` collects Python modules only — `templates/` and `static/` are data, so without an explicit declaration they are absent from the installed package.
+
+**This is a startup crash, not a degraded page.** `app.py` constructs `StaticFiles(directory=...)` inside `create_app`, and Starlette's `StaticFiles.__init__` raises `RuntimeError: Directory '...' does not exist` immediately when the directory is missing — verified against the installed Starlette. So the container dies on boot, the healthcheck never passes, and compose restarts it forever. Every test passes locally and the image builds clean, because the source tree is importable in development either way. This task is the only thing standing between the branch and a dead deploy.
 
 **Files:**
 - Modify: `server/pyproject.toml` (package-data), `README.md` (route table, Step status)

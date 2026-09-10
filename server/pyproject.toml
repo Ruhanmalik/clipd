@@ -7,6 +7,7 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "python-multipart>=0.0.12",
     "httpx>=0.27",
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -18,6 +19,14 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["clipd*"]
+
+# templates/ and static/ are data, not modules, so packages.find does not
+# collect them. The Dockerfile installs with `pip install .`, so without this
+# StaticFiles raises RuntimeError inside create_app on the missing directory —
+# the container dies on boot and compose restarts it forever — and nothing in
+# local development would catch it, because the source tree is importable.
+[tool.setuptools.package-data]
+clipd = ["templates/*.html", "static/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

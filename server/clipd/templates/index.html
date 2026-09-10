@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+  {% if not games %}
+    <p class="empty">Nothing captured yet. Press the replay hotkey and it lands here.</p>
+  {% else %}
+    {% if recent %}
+      <section class="strip">
+        <h2 class="section-title">Recent</h2>
+        <div class="strip-rail">
+          {% for clip in recent %}
+            <a class="strip-item" href="/v/{{ clip.id }}">
+              <div class="thumb">
+                {% if clip.thumb_path %}
+                  <img src="/t/{{ clip.id }}" alt="" loading="lazy">
+                {% endif %}
+                {% if clip.duration_s %}
+                  <span class="badge">{{ human_duration(clip.duration_s) }}</span>
+                {% endif %}
+              </div>
+              <span class="strip-name">{{ display_title(clip) }}</span>
+              <span class="strip-when">{{ relative_time(clip.created_at, now) }}</span>
+            </a>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    <section>
+      <h2 class="section-title">Games</h2>
+      <div class="tiles">
+        {% for game in games %}
+          <a class="tile" href="/g/{{ game.game_slug }}">
+            <div class="thumb">
+              {% if game.cover_thumb %}
+                <img src="/t/{{ game.cover_id }}" alt="" loading="lazy">
+              {% endif %}
+            </div>
+            <span class="tile-name">{{ game.game or UNKNOWN }}</span>
+            <span class="tile-meta">
+              {{ pluralize(game.clips, "capture") }} · {{ human_bytes(game.bytes) }}
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

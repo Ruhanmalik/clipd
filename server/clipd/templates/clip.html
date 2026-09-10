@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}{{ display_title(clip) }} · clipd{% endblock %}
+
+{% block subnav %}
+  <span class="crumb">
+    / <a href="/g/{{ clip.game_slug }}">{{ clip.game or UNKNOWN }}</a>
+  </span>
+{% endblock %}
+
+{% block content %}
+  {% if clip.kind == "clip" %}
+    <video class="player" src="/m/{{ clip.id }}" controls autoplay
+           preload="metadata" playsinline></video>
+  {% else %}
+    <div class="player"><img src="/m/{{ clip.id }}" alt="{{ display_title(clip) }}"></div>
+  {% endif %}
+
+  <div class="detail-head">
+    <h1 class="detail-title">{{ display_title(clip) }}</h1>
+    <div class="actions">
+      <a class="button" href="/d/{{ clip.id }}">Download</a>
+    </div>
+  </div>
+
+  <dl class="detail-meta">
+    <dt>Captured</dt><dd>{{ relative_time(clip.created_at, now) }}</dd>
+    {% if clip.duration_s %}
+      <dt>Duration</dt><dd>{{ human_duration(clip.duration_s) }}</dd>
+    {% endif %}
+    {% if clip.width and clip.height %}
+      <dt>Resolution</dt><dd>{{ clip.width }}×{{ clip.height }}</dd>
+    {% endif %}
+    <dt>Size</dt><dd>{{ human_bytes(clip.bytes) }}</dd>
+    <dt>Source</dt><dd>{{ clip.source_host }}</dd>
+  </dl>
+{% endblock %}

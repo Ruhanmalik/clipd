@@ -1,4 +1,5 @@
 import pytest
+from clipd import storage
 from clipd.storage import (
     rel_path_for, thumb_rel_path, write_stream, move_capture, remove_capture,
 )
@@ -71,3 +72,9 @@ async def test_remove_capture_deletes_file_and_empty_dirs(tmp_path):
 
 def test_remove_capture_is_safe_when_file_is_already_gone(tmp_path):
     remove_capture(tmp_path, "clips/halo/2026/09/missing.mp4")  # must not raise
+
+
+@pytest.mark.parametrize("rel_path", ["", ".", "./", "clips/..", "clips/../."])
+def test_resolve_capture_refuses_the_store_root(tmp_path, rel_path):
+    with pytest.raises(ValueError):
+        storage.resolve_capture(tmp_path, rel_path)
