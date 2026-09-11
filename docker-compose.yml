@@ -4,8 +4,8 @@ services:
     container_name: clipd
     restart: unless-stopped
     ports:
-      # 8000 is free on clipd-server; 3000/3001/5055/6767/7878/8080/8096/8989/9696
-      # are all taken by existing services. See plan.md §3.
+      # Confirm 8000 is free on the host before deploying - a box already
+      # running other services often has the common ports taken. See plan.md §3.
       - "8000:8000"
     volumes:
       # Bind mount, not a named volume — house convention (plan.md §4), and it
