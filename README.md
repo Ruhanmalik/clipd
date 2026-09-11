@@ -72,3 +72,7 @@ Two `.env` values are worth confirming before the first deploy, because both fai
 silently rather than loudly: `BASE_URL` must be clipd-server's tailnet URL (the
 `localhost:8000` default puts a link to the *reading* device on your clipboard),
 and an empty `NTFY_TOPIC` disables notifications entirely.
+
+## License
+
+MIT - see [LICENSE](LICENSE).
