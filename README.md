@@ -40,8 +40,18 @@ See the design spec §8a.
 Editing, trimming, deleting, and the dormant share routes are Step 3b.
 
 ## Development
+Each package has its own suite, run from its own directory:
+
     cd server && pip install -e ".[dev]" && python -m pytest
     cd client && pip install -e ".[dev]" && python -m pytest
+
+The integration suite runs from the repo root and drives the real
+`clipwatch.upload()` against a real `clipd` app in one process:
+
+    python -m pytest
+
+It needs both packages importable; `pytest.ini` puts `server/` and `client/`
+on the path itself, so it does not depend on the editable installs.
 
 ## Deploy
 
