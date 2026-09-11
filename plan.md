@@ -341,8 +341,5 @@ The four questions this section originally asked are all settled by Steps 1-3a.
   hotkey. The highest-value thing to check first: an elevated anti-cheat game
   may deny `psutil` process access, which would file every capture as
   `Unknown` behind a debug log.
-- **No test crosses the client/server seam.** `clipwatch.upload()` is tested
-  against a hand-written mock transport and `/ingest` against a hand-built
-  request, so a contract drift between the two would leave both suites green.
 - **Step 3b** — trim, delete, and whether the dormant share routes are ever
   switched on.
