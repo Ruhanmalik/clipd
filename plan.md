@@ -57,28 +57,25 @@ Tailscale tailnet, MagicDNS suffix `tailnet-name.ts.net`:
 | laptop | `<laptop-ip>` | `laptop.tailnet-name.ts.net` |
 | phone | `<phone-ip>` | `phone.tailnet-name.ts.net` |
 
-`tailscale serve` is **not** configured (`No serve config`). Worth setting up
-separately — it gives real HTTPS certs on `*.ts.net` with no port numbers.
+`tailscale serve` is worth setting up separately — it gives real HTTPS certs
+on `*.ts.net` with no port numbers.
 
-### Ports already bound on clipd-server — pick around these
+### Port selection
+
+clipd binds **`8000`**. A homelab box usually has the common ports already
+taken by whatever else it runs, so confirm the port is free before deploying,
+and pick another if not:
 
 ```
-22    sshd                 3000  homepage           7878  radarr
-53    adguardhome          3001  uptime-kuma        8080  qbittorrent (via gluetun)
-80    adguardhome          5055  jellyseerr         8096  jellyfin
-6246  (misc)               6767  bazarr             8989  sonarr
-9696  prowlarr             7359/udp jellyfin discovery
+ss -ltn | awk 'NR>1 {print $4}' | sed 's/.*://' | sort -un
 ```
-
-**clipd will use port `8000`** — confirmed free.
 
 ---
 
 ## 4. Existing homelab conventions — follow these
 
 - **One directory per service** under `/home/<user>/`, each with its own
-  `docker-compose.yml`. Existing: `adguard/`, `homepage/`, `jellyfin/`,
-  `minecraft/`, `uptime-kuma/`. So: **`/home/<user>/clipd/`**.
+  `docker-compose.yml`. So: **`/home/<user>/clipd/`**.
 - Bind-mount local dirs (`./data:/data`), not named volumes.
 - `restart: unless-stopped` on everything.
 - `TZ: "America/Chicago"` set explicitly.
@@ -195,8 +192,8 @@ Date-sharded so no directory ever holds tens of thousands of entries.
 
 ### Retention — do not skip this
 
-Radarr and Sonarr are actively consuming the same 254G. Clips must not be the
-thing that fills the disk at 3am.
+Other services on the box are actively consuming the same 254G. Clips must not
+be the thing that fills the disk at 3am.
 
 - Config: max total clip-store size **and** max age.
 - Prune oldest-first when over budget; **never touch** anything with a
